@@ -1,0 +1,20 @@
+# direnv
+.direnv
+.envrc.local
+
+# nix
+result*
+repl-result*
+
+# binaries
+/bin
+
+# python
+__pycache__/
+
+# claude
+.claude/
+CLAUDE.md
+
+# other
+tmp/

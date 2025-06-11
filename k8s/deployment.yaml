@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: seqctl
+  namespace: seqctl
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: seqctl
+  template:
+    metadata:
+      labels:
+        app: seqctl
+    spec:
+      serviceAccountName: seqctl
+      containers:
+        - name: seqctl
+          image: golemnetwork/seqctl:latest
+          imagePullPolicy: Always
+          args:
+            - web
+            - --config
+            - /etc/seqctl/config.toml
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: SEQCTL_LOG_NO_COLOR
+              value: "true"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /etc/seqctl
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: seqctl-config

@@ -1,0 +1,180 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: seqctl
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod download
+
+builds:
+  - id: seqctl
+    main: ./cmd/seqctl
+    binary: seqctl
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X github.com/golem-base/seqctl/pkg/version.Version={{.Version}}
+      - -X github.com/golem-base/seqctl/pkg/version.GitCommit={{.Commit}}
+      - -X github.com/golem-base/seqctl/pkg/version.GitDate={{.Date}}
+
+archives:
+  - id: default
+    name_template: >-
+      {{ .ProjectName }}_ {{- .Version }}_ {{- title .Os }}_ {{- if eq .Arch "amd64" }}x86_64 {{- else if eq .Arch "386" }}i386 {{- else }}{{ .Arch }}{{ end }} {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+      - README.md
+      - examples/config.example.toml
+
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-dev"
+
+# Build Docker images
+dockers:
+  - image_templates:
+      - "golemnetwork/seqctl:{{ .Version }}-amd64"
+      - "golemnetwork/seqctl:{{ .Tag }}-amd64"
+      - "golemnetwork/seqctl:v{{ .Major }}-amd64"
+      - "golemnetwork/seqctl:v{{ .Major }}.{{ .Minor }}-amd64"
+      - "golemnetwork/seqctl:latest-amd64"
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--build-arg=VERSION={{.Version}}"
+      - "--build-arg=GIT_COMMIT={{.Commit}}"
+      - "--build-arg=GIT_DATE={{.Date}}"
+
+  - image_templates:
+      - "golemnetwork/seqctl:{{ .Version }}-arm64"
+      - "golemnetwork/seqctl:{{ .Tag }}-arm64"
+      - "golemnetwork/seqctl:v{{ .Major }}-arm64"
+      - "golemnetwork/seqctl:v{{ .Major }}.{{ .Minor }}-arm64"
+      - "golemnetwork/seqctl:latest-arm64"
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--build-arg=VERSION={{.Version}}"
+      - "--build-arg=GIT_COMMIT={{.Commit}}"
+      - "--build-arg=GIT_DATE={{.Date}}"
+    goarch: arm64
+
+# Create Docker manifests for multi-arch
+docker_manifests:
+  - name_template: "golemnetwork/seqctl:{{ .Version }}"
+    image_templates:
+      - "golemnetwork/seqctl:{{ .Version }}-amd64"
+      - "golemnetwork/seqctl:{{ .Version }}-arm64"
+
+  - name_template: "golemnetwork/seqctl:{{ .Tag }}"
+    image_templates:
+      - "golemnetwork/seqctl:{{ .Tag }}-amd64"
+      - "golemnetwork/seqctl:{{ .Tag }}-arm64"
+
+  - name_template: "golemnetwork/seqctl:v{{ .Major }}"
+    image_templates:
+      - "golemnetwork/seqctl:v{{ .Major }}-amd64"
+      - "golemnetwork/seqctl:v{{ .Major }}-arm64"
+
+  - name_template: "golemnetwork/seqctl:v{{ .Major }}.{{ .Minor }}"
+    image_templates:
+      - "golemnetwork/seqctl:v{{ .Major }}.{{ .Minor }}-amd64"
+      - "golemnetwork/seqctl:v{{ .Major }}.{{ .Minor }}-arm64"
+
+  - name_template: "golemnetwork/seqctl:latest"
+    image_templates:
+      - "golemnetwork/seqctl:latest-amd64"
+      - "golemnetwork/seqctl:latest-arm64"
+
+# SBOM generation
+sboms:
+  - artifacts: archive
+    id: archive
+    documents:
+      - "${artifact}.sbom.json"
+  - artifacts: package
+    id: package
+    documents:
+      - "${artifact}.sbom.json"
+
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Documentation
+      regexp: '^.*?docs(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Others
+      order: 999
+  filters:
+    exclude:
+      - '^chore:'
+      - '^ci:'
+      - '^test:'
+      - '^build:'
+
+release:
+  github:
+    owner: golem-base
+    name: seqctl
+
+  header: |
+    ## seqctl {{ .Tag }}
+
+    Web-based control panel for managing Optimism conductor sequencer clusters.
+
+    ### Installation
+
+    #### Binary
+
+    Download the appropriate binary for your platform from the assets below.
+
+    #### Docker
+
+    ```bash
+    docker pull golemnetwork/seqctl:{{ .Tag }}
+    ```
+
+    #### Kubernetes
+
+    ```bash
+    kubectl apply -k github.com/golem-base/seqctl/k8s?ref={{ .Tag }}
+    ```
+
+  draft: false
+  prerelease: auto

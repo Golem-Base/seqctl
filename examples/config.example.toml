@@ -1,0 +1,53 @@
+# Example configuration file for seqctl
+
+# Kubernetes configuration
+[k8s]
+config_path = "/path/to/kubeconfig"                                 # Path to kubeconfig file (optional, uses default locations)
+statefulset_selector = "golem-base.io/optimism-role in (sequencer)" # Selector for StatefulSets
+service_selector = "golem-base.io/optimism-role in (sequencer)"     # Selector for Services (defaults to statefulset_selector)
+
+# Performance tip: For better performance, you can include the app label in service selector
+# to reduce the number of services fetched. Example:
+# service_selector = "golem-base.io/optimism-role in (sequencer),app"
+
+# Label keys for discovering sequencer properties
+# network_label = "golem-base.io/eth-network"           # Label key for network identification
+# app_label = "app"                                     # Label key for app identification
+# sequencer_role_label = "golem-base.io/sequencer-role" # Label key for voter role
+# sequencer_voter_values = ["voter"]                    # Values that indicate voting members (can specify multiple)
+# sequencer_voter_values = ["voter", "active-voter"]    # Example: multiple values for voting members
+
+# Filter resources by sequencer mode (e.g. only scan HA sequencers)
+# Empty means no filtering - will scan all namespaces/resources
+# Supports full Kubernetes label selector syntax:
+# sequencer_mode_filter = "golem-base.io/sequencer-mode=ha"
+# sequencer_mode_filter = "golem-base.io/sequencer-mode in (ha, active)"
+# sequencer_mode_filter = "golem-base.io/sequencer-mode=ha,environment=production"
+
+# Connection mode configuration
+# Options: "proxy", "direct", "auto"
+# - proxy: Use Kubernetes API proxy (works from anywhere with kubectl access)
+# - direct: Use direct service connections (requires network access to cluster)
+# - auto: Automatically detect best mode (default)
+connection_mode = "auto"
+
+# Namespaces to scan
+# Empty or omitted means all namespaces
+namespaces = ["production", "staging"]
+
+# Logging configuration
+[log]
+level = "info"   # debug, info, warn, error
+format = "text"  # text, json
+no_color = false # Disable colored output
+file_path = ""   # Path to log file (empty = stderr)
+
+# Server configuration
+[server]
+address = "0.0.0.0" # Server listen address
+port = 8080         # Server port
+
+# Cache configuration
+[cache]
+discovery_ttl = "5m" # How long to cache network discovery (e.g. 5m, 30s)
+status_ttl = "10s"   # How long before refreshing network status (e.g. 10s, 1m)

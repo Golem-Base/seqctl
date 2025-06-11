@@ -1,0 +1,880 @@
+{
+  "schemes": [
+    "http",
+    "https"
+  ],
+  "swagger": "2.0",
+  "info": {
+    "description": "Control panel API for managing Optimism conductor sequencer clusters\nThis API provides endpoints to manage and monitor sequencer clusters deployed in Kubernetes environments.",
+    "title": "SeqCtl API",
+    "contact": {
+      "name": "Golem Base Authors",
+      "url": "https://github.com/golem-base/seqctl"
+    },
+    "license": {
+      "name": "Apache 2.0",
+      "url": "https://github.com/golem-base/seqctl/blob/main/LICENSE"
+    },
+    "version": "1.0"
+  },
+  "host": "localhost:8080",
+  "basePath": "/api/v1",
+  "paths": {
+    "/networks": {
+      "get": {
+        "description": "Get a list of all sequencer networks in the environment",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Networks"
+        ],
+        "summary": "List all networks",
+        "responses": {
+          "200": {
+            "description": "List of networks",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/handlers.NetworkResponse"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/networks/{network}": {
+      "get": {
+        "description": "Get detailed information about a specific network",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Networks"
+        ],
+        "summary": "Get network details",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Network name",
+            "name": "network",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Network details",
+            "schema": {
+              "$ref": "#/definitions/handlers.NetworkResponse"
+            }
+          },
+          "404": {
+            "description": "Network not found",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/networks/{network}/sequencers": {
+      "get": {
+        "description": "Get all sequencers belonging to a specific network",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Networks",
+          "Sequencers"
+        ],
+        "summary": "List network sequencers",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Network name",
+            "name": "network",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of sequencers",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/handlers.SequencerResponse"
+              }
+            }
+          },
+          "404": {
+            "description": "Network not found",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/sequencers/{id}/force-active": {
+      "post": {
+        "description": "Force a sequencer to become the active sequencer (WARNING: Use only in emergencies)",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Actions"
+        ],
+        "summary": "Force sequencer active",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Sequencer ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "description": "Optional block hash to start from",
+            "name": "request",
+            "in": "body",
+            "schema": {
+              "$ref": "#/definitions/handlers.ForceActiveRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sequencer activated",
+            "schema": {
+              "$ref": "#/definitions/handlers.SequencerResponse"
+            }
+          },
+          "404": {
+            "description": "Sequencer not found",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "409": {
+            "description": "Sequencer already active",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Operation failed",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/sequencers/{id}/halt": {
+      "post": {
+        "description": "Stop a sequencer from processing transactions",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Actions"
+        ],
+        "summary": "Halt sequencer",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Sequencer ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sequencer halted",
+            "schema": {
+              "$ref": "#/definitions/handlers.SequencerResponse"
+            }
+          },
+          "404": {
+            "description": "Sequencer not found",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "409": {
+            "description": "Sequencer already halted",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Operation failed",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/sequencers/{id}/membership": {
+      "put": {
+        "description": "Add a new server to the Raft cluster as either a voting or non-voting member",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Actions"
+        ],
+        "summary": "Update cluster membership",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Sequencer ID (must be leader)",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "description": "New member details",
+            "name": "request",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/handlers.UpdateMembershipRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Membership updated",
+            "schema": {
+              "$ref": "#/definitions/handlers.SequencerResponse"
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Sequencer not found",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Operation failed",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          }
+        }
+      },
+      "delete": {
+        "description": "Remove a server from the Raft cluster membership",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Actions"
+        ],
+        "summary": "Remove server from cluster",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Sequencer ID (must be leader)",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "description": "Server to remove",
+            "name": "request",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/handlers.RemoveMemberRequest"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Server removed successfully"
+          },
+          "400": {
+            "description": "Invalid request",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Sequencer not found",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Operation failed",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/sequencers/{id}/override-leader": {
+      "post": {
+        "description": "Force override the leader status of a sequencer (WARNING: Can cause split-brain)",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Actions"
+        ],
+        "summary": "Override leader status",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Sequencer ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "description": "Override configuration",
+            "name": "request",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/handlers.OverrideLeaderRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Leader status overridden",
+            "schema": {
+              "$ref": "#/definitions/handlers.SequencerResponse"
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Sequencer not found",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Operation failed",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/sequencers/{id}/pause": {
+      "post": {
+        "description": "Pause the conductor service on a sequencer, stopping it from participating in consensus",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Actions"
+        ],
+        "summary": "Pause conductor",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Sequencer ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated sequencer state",
+            "schema": {
+              "$ref": "#/definitions/handlers.SequencerResponse"
+            }
+          },
+          "404": {
+            "description": "Sequencer not found",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "409": {
+            "description": "Conductor already paused",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Operation failed",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/sequencers/{id}/resign-leader": {
+      "post": {
+        "description": "Make the current leader sequencer resign, triggering a new leader election",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Actions"
+        ],
+        "summary": "Resign leadership",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Sequencer ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Leadership resignation accepted",
+            "schema": {
+              "$ref": "#/definitions/handlers.SequencerResponse"
+            }
+          },
+          "404": {
+            "description": "Sequencer not found",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "409": {
+            "description": "Sequencer is not the current leader",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Operation failed",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/sequencers/{id}/resume": {
+      "post": {
+        "description": "Resume the conductor service on a sequencer, allowing it to participate in consensus again",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Actions"
+        ],
+        "summary": "Resume conductor",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Sequencer ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated sequencer state",
+            "schema": {
+              "$ref": "#/definitions/handlers.SequencerResponse"
+            }
+          },
+          "404": {
+            "description": "Sequencer not found",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "409": {
+            "description": "Conductor already active",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Operation failed",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/sequencers/{id}/transfer-leader": {
+      "post": {
+        "description": "Transfer Raft leadership from the current leader to a specified target sequencer",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Actions"
+        ],
+        "summary": "Transfer leadership",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Sequencer ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "description": "Transfer target details",
+            "name": "request",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/handlers.TransferLeaderRequest"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Leadership transfer initiated",
+            "schema": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Sequencer not found",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "409": {
+            "description": "Cannot transfer from current leader",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Operation failed",
+            "schema": {
+              "$ref": "#/definitions/handlers.ErrorResponse"
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "handlers.ErrorResponse": {
+      "type": "object",
+      "properties": {
+        "detail": {
+          "type": "string"
+        },
+        "errors": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "instance": {
+          "type": "string"
+        },
+        "status": {
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      }
+    },
+    "handlers.ForceActiveRequest": {
+      "type": "object",
+      "properties": {
+        "block_hash": {
+          "type": "string"
+        }
+      }
+    },
+    "handlers.Link": {
+      "type": "object",
+      "properties": {
+        "href": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        }
+      }
+    },
+    "handlers.NetworkLinks": {
+      "type": "object",
+      "properties": {
+        "self": {
+          "$ref": "#/definitions/handlers.Link"
+        },
+        "sequencers": {
+          "$ref": "#/definitions/handlers.Link"
+        }
+      }
+    },
+    "handlers.NetworkResponse": {
+      "type": "object",
+      "properties": {
+        "_links": {
+          "$ref": "#/definitions/handlers.NetworkLinks"
+        },
+        "healthy": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "sequencers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/handlers.SequencerResponse"
+          }
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      }
+    },
+    "handlers.OverrideLeaderRequest": {
+      "type": "object",
+      "properties": {
+        "override": {
+          "type": "boolean"
+        }
+      }
+    },
+    "handlers.RemoveMemberRequest": {
+      "type": "object",
+      "required": [
+        "server_id"
+      ],
+      "properties": {
+        "server_id": {
+          "type": "string"
+        }
+      }
+    },
+    "handlers.SequencerLinks": {
+      "type": "object",
+      "properties": {
+        "force_active": {
+          "$ref": "#/definitions/handlers.Link"
+        },
+        "halt": {
+          "$ref": "#/definitions/handlers.Link"
+        },
+        "network": {
+          "$ref": "#/definitions/handlers.Link"
+        },
+        "override_leader": {
+          "$ref": "#/definitions/handlers.Link"
+        },
+        "pause": {
+          "$ref": "#/definitions/handlers.Link"
+        },
+        "remove_member": {
+          "$ref": "#/definitions/handlers.Link"
+        },
+        "resign_leader": {
+          "$ref": "#/definitions/handlers.Link"
+        },
+        "resume": {
+          "$ref": "#/definitions/handlers.Link"
+        },
+        "self": {
+          "$ref": "#/definitions/handlers.Link"
+        },
+        "transfer_leader": {
+          "$ref": "#/definitions/handlers.Link"
+        },
+        "update_member": {
+          "$ref": "#/definitions/handlers.Link"
+        }
+      }
+    },
+    "handlers.SequencerResponse": {
+      "type": "object",
+      "properties": {
+        "_links": {
+          "$ref": "#/definitions/handlers.SequencerLinks"
+        },
+        "conductor_active": {
+          "type": "boolean"
+        },
+        "conductor_leader": {
+          "type": "boolean"
+        },
+        "conductor_paused": {
+          "type": "boolean"
+        },
+        "conductor_stopped": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "network_id": {
+          "type": "string"
+        },
+        "raft_addr": {
+          "type": "string"
+        },
+        "sequencer_active": {
+          "type": "boolean"
+        },
+        "sequencer_healthy": {
+          "type": "boolean"
+        },
+        "unsafe_l2": {
+          "type": "integer"
+        },
+        "updated_at": {
+          "type": "string"
+        },
+        "voting": {
+          "type": "boolean"
+        }
+      }
+    },
+    "handlers.TransferLeaderRequest": {
+      "type": "object",
+      "required": [
+        "target_addr",
+        "target_id"
+      ],
+      "properties": {
+        "target_addr": {
+          "type": "string"
+        },
+        "target_id": {
+          "type": "string"
+        }
+      }
+    },
+    "handlers.UpdateMembershipRequest": {
+      "type": "object",
+      "required": [
+        "server_addr",
+        "server_id"
+      ],
+      "properties": {
+        "server_addr": {
+          "type": "string"
+        },
+        "server_id": {
+          "type": "string"
+        },
+        "voting": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "description": "Operations related to sequencer networks",
+      "name": "Networks"
+    },
+    {
+      "description": "Operations for managing individual sequencers",
+      "name": "Sequencers"
+    },
+    {
+      "description": "Sequencer control actions (pause, resume, transfer leadership, etc.)",
+      "name": "Actions"
+    }
+  ]
+}

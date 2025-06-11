@@ -1,0 +1,11 @@
+[web]
+address = "0.0.0.0"
+port = 8080
+
+[k8s]
+selector = "app=op-conductor"
+connection_mode = "auto"
+
+[log]
+level = "info"
+format = "json"

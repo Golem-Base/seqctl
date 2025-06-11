@@ -1,0 +1,69 @@
+# Git files
+.git
+.gitignore
+
+# Documentation
+*.md
+docs/
+LICENSE
+
+# Development files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test files
+*_test.go
+testdata/
+
+# Build artifacts
+bin/
+dist/
+*.exe
+seqctl
+
+# Frontend development files
+web/node_modules/
+web/dist/
+web/.parcel-cache/
+web/coverage/
+web/.env.local
+web/.env.development.local
+web/.env.test.local
+web/.env.production.local
+web/npm-debug.log*
+web/yarn-debug.log*
+web/yarn-error.log*
+
+# Go build cache
+vendor/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Nix files
+flake.nix
+flake.lock
+nix/
+.envrc
+.direnv/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Kubernetes manifests (not needed for building)
+k8s/
+
+# Scripts that aren't needed in build
+scripts/
+justfile
+
+# Python files
+python/
+
+# Temporary files
+tmp/
