@@ -1,0 +1,34 @@
+package sequencer
+
+import (
+	"context"
+
+	"github.com/ethereum/go-ethereum"
+	ethrpc "github.com/ethereum/go-ethereum/rpc"
+)
+
+// RPCAdapter adapts an ethrpc.Client to the RPC interface required by sources.NewRollupClient
+type RPCAdapter struct {
+	client *ethrpc.Client
+}
+
+func NewRPCAdapter(client *ethrpc.Client) *RPCAdapter {
+	return &RPCAdapter{client: client}
+}
+
+func (a *RPCAdapter) CallContext(ctx context.Context, result any, method string, args ...any) error {
+	return a.client.CallContext(ctx, result, method, args...)
+}
+
+func (a *RPCAdapter) BatchCallContext(ctx context.Context, b []ethrpc.BatchElem) error {
+	return a.client.BatchCallContext(ctx, b)
+}
+
+// Subscribe implements the Subscribe method required by the RPC interface
+func (a *RPCAdapter) Subscribe(ctx context.Context, namespace string, channel any, args ...any) (ethereum.Subscription, error) {
+	return a.client.Subscribe(ctx, namespace, channel, args...)
+}
+
+func (a *RPCAdapter) Close() {
+	a.client.Close()
+}
