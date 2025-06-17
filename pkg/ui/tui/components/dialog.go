@@ -55,16 +55,16 @@ func (d *Dialog) Show(config DialogConfig) {
 	// Format title based on type
 	switch config.Type {
 	case DialogTypeError:
-		text = fmt.Sprintf("[red][::b]%s[::-][-]\n\n%s", config.Title, config.Message)
+		text = fmt.Sprintf("[%s][::b]%s[::-][-]\n\n%s", d.theme.ErrorColor.String(), config.Title, config.Message)
 	case DialogTypeWarning:
-		text = fmt.Sprintf("[orange][::b]%s[::-][-]\n\n%s", config.Title, config.Message)
+		text = fmt.Sprintf("[%s][::b]%s[::-][-]\n\n%s", d.theme.WarningColor.String(), config.Title, config.Message)
 	default:
 		text = fmt.Sprintf("[::b]%s[::-]\n\n%s", config.Title, config.Message)
 	}
 
 	// Add danger warning for confirm dialogs
 	if config.Type == DialogTypeConfirm && config.Dangerous {
-		text += "\n\n[red]⚠️  This is a potentially dangerous operation[-]"
+		text += fmt.Sprintf("\n\n[%s]⚠️  This is a potentially dangerous operation[-]", d.theme.ErrorColor.String())
 	}
 
 	// Setup buttons and callbacks based on type
@@ -162,11 +162,11 @@ func (d *Dialog) ShowResumeConfirm(sequencerID, networkName string, onConfirm, o
 func (d *Dialog) ShowOverrideLeaderConfirm(sequencerID, networkName string, isLeader bool, onConfirm, onCancel func()) {
 	var message string
 	if isLeader {
-		message = fmt.Sprintf("Remove leader override for sequencer %s?\n\nNetwork: %s\nSequencer: %s\n\n[orange]⚠️  Removing the override requires manually restarting the op-node pod[-]",
-			sequencerID, networkName, sequencerID)
+		message = fmt.Sprintf("Remove leader override for sequencer %s?\n\nNetwork: %s\nSequencer: %s\n\n[%s]⚠️  Removing the override requires manually restarting the op-node pod[-]",
+			sequencerID, networkName, sequencerID, d.theme.WarningColor.String())
 	} else {
-		message = fmt.Sprintf("Set leader override for sequencer %s?\n\nNetwork: %s\nSequencer: %s\n\n[orange]⚠️  This will force the sequencer to act as leader regardless of cluster state[-]",
-			sequencerID, networkName, sequencerID)
+		message = fmt.Sprintf("Set leader override for sequencer %s?\n\nNetwork: %s\nSequencer: %s\n\n[%s]⚠️  This will force the sequencer to act as leader regardless of cluster state[-]",
+			sequencerID, networkName, sequencerID, d.theme.WarningColor.String())
 	}
 
 	d.ShowConfirm("Override Leader", message, true, onConfirm, onCancel)
@@ -174,7 +174,7 @@ func (d *Dialog) ShowOverrideLeaderConfirm(sequencerID, networkName string, isLe
 
 // ShowHaltConfirm shows a confirmation dialog for halt operation
 func (d *Dialog) ShowHaltConfirm(sequencerID, networkName string, onConfirm, onCancel func()) {
-	message := fmt.Sprintf("Network: %s\nSequencer: %s\n\n[red]⚠️  This will stop the sequencer from producing blocks[-]",
-		networkName, sequencerID)
+	message := fmt.Sprintf("Network: %s\nSequencer: %s\n\n[%s]⚠️  This will stop the sequencer from producing blocks[-]",
+		networkName, sequencerID, d.theme.ErrorColor.String())
 	d.ShowConfirm("Halt Sequencer", message, true, onConfirm, onCancel)
 }

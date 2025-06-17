@@ -14,13 +14,13 @@ import (
 
 // ActionDispatcher handles action execution with proper error handling
 type ActionDispatcher struct {
-	appModel      *model.AppModel
-	flashModel    *model.FlashModel
-	app           *tview.Application
-	dialogManager *DialogManager
+	appModel       *model.AppModel
+	flashModel     *model.FlashModel
+	app            *tview.Application
+	dialogManager  *DialogManager
 	refreshManager *RefreshManager
-	readOnlyMode  bool
-	confirmDanger bool
+	readOnlyMode   bool
+	confirmDanger  bool
 }
 
 // NewActionDispatcher creates a new action dispatcher

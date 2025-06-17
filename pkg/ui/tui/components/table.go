@@ -1,6 +1,7 @@
 package components
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
@@ -16,7 +17,7 @@ type SequencerTable struct {
 	theme              *styles.Theme
 	icons              *styles.Icons
 	onSelectionChanged func(int)
-	
+
 	// Current data
 	sequencers    []*sequencer.Sequencer
 	selectedIndex int
@@ -123,10 +124,15 @@ func (t *SequencerTable) updateTable() {
 			color     tcell.Color
 		}{
 			{
-				text:      styles.FormatLeaderIcon(seq.Status.ConductorLeader, t.icons),
+				text:      t.formatLeaderIcon(seq.Status.ConductorLeader),
 				expansion: 0,
 				align:     tview.AlignCenter,
-				color:     t.getLeaderColor(seq.Status.ConductorLeader),
+				color: func() tcell.Color {
+					if seq.Status.ConductorLeader {
+						return t.theme.LeaderColor
+					}
+					return t.theme.TableFg
+				}(),
 			},
 			{
 				text:      seq.Config.ID,
@@ -135,25 +141,25 @@ func (t *SequencerTable) updateTable() {
 				color:     t.theme.TableFg,
 			},
 			{
-				text:      styles.FormatBooleanColored(seq.Status.ConductorActive, t.icons),
+				text:      t.formatBoolean(seq.Status.ConductorActive),
 				expansion: 1,
 				align:     tview.AlignCenter,
 				color:     t.theme.TableFg,
 			},
 			{
-				text:      styles.FormatBooleanColored(seq.Status.SequencerHealthy, t.icons),
+				text:      t.formatBoolean(seq.Status.SequencerHealthy),
 				expansion: 1,
 				align:     tview.AlignCenter,
 				color:     t.theme.TableFg,
 			},
 			{
-				text:      styles.FormatBooleanColored(seq.Status.SequencerActive, t.icons),
+				text:      t.formatBoolean(seq.Status.SequencerActive),
 				expansion: 1,
 				align:     tview.AlignCenter,
 				color:     t.theme.TableFg,
 			},
 			{
-				text:      styles.FormatBooleanColored(seq.Config.Voting, t.icons),
+				text:      t.formatBoolean(seq.Config.Voting),
 				expansion: 1,
 				align:     tview.AlignCenter,
 				color:     t.theme.TableFg,
@@ -185,14 +191,6 @@ func (t *SequencerTable) updateTable() {
 			t.onSelectionChanged(0)
 		}
 	}
-}
-
-// getLeaderColor returns the appropriate color for leader status
-func (t *SequencerTable) getLeaderColor(isLeader bool) tcell.Color {
-	if isLeader {
-		return t.theme.LeaderColor
-	}
-	return t.theme.TableFg
 }
 
 // Focus sets focus to the table
@@ -234,7 +232,23 @@ func (t *SequencerTable) SetSelectedIndex(index int) {
 	}
 }
 
-// GetSelectedIndex returns the current selected index  
+// GetSelectedIndex returns the current selected index
 func (t *SequencerTable) GetSelectedIndex() int {
 	return t.selectedIndex
+}
+
+// formatBoolean formats a boolean value with colored icon
+func (t *SequencerTable) formatBoolean(status bool) string {
+	if status {
+		return fmt.Sprintf("[%s]%s[-]", t.theme.SuccessColor.String(), t.icons.Active)
+	}
+	return fmt.Sprintf("[%s]%s[-]", t.theme.ErrorColor.String(), t.icons.Inactive)
+}
+
+// formatLeaderIcon formats leader status for icon column (empty if not leader)
+func (t *SequencerTable) formatLeaderIcon(isLeader bool) string {
+	if isLeader {
+		return t.icons.Leader
+	}
+	return ""
 }

@@ -41,7 +41,7 @@ func NewDetailsPanel(theme *styles.Theme) *DetailsPanel {
 // updateContent updates the panel content
 func (d *DetailsPanel) updateContent(seq *sequencer.Sequencer) {
 	if seq == nil {
-		d.TextView.SetText("[dim]No sequencer selected[-]")
+		d.TextView.SetText(fmt.Sprintf("[%s]No sequencer selected[-]", d.theme.SecondaryColor.String()))
 		d.current = nil
 		return
 	}
@@ -51,10 +51,10 @@ func (d *DetailsPanel) updateContent(seq *sequencer.Sequencer) {
 	var details strings.Builder
 
 	// Basic info
-	details.WriteString(fmt.Sprintf("[aqua]ID:[-] %s\n", seq.Config.ID))
+	details.WriteString(fmt.Sprintf("[%s]ID:[-] %s\n", d.theme.PrimaryColor.String(), seq.Config.ID))
 
 	// Status section
-	details.WriteString("\n[aqua]Status:[-]\n")
+	details.WriteString(fmt.Sprintf("\n[%s]Status:[-]\n", d.theme.PrimaryColor.String()))
 	statusItems := []struct {
 		label string
 		value bool
@@ -70,19 +70,19 @@ func (d *DetailsPanel) updateContent(seq *sequencer.Sequencer) {
 	}
 
 	// Configuration section
-	details.WriteString("\n[aqua]Configuration:[-]\n")
+	details.WriteString(fmt.Sprintf("\n[%s]Configuration:[-]\n", d.theme.PrimaryColor.String()))
 	details.WriteString(fmt.Sprintf("  Voting: %s\n", d.formatBooleanStatus(seq.Config.Voting)))
 	details.WriteString(fmt.Sprintf("  Timeout: %s\n", seq.Config.Timeout.String()))
 
 	// Network endpoints
-	details.WriteString("\n[aqua]Network Endpoints:[-]\n")
+	details.WriteString(fmt.Sprintf("\n[%s]Network Endpoints:[-]\n", d.theme.PrimaryColor.String()))
 	details.WriteString(fmt.Sprintf("  Conductor RPC: %s\n", seq.Config.ConductorRPCURL))
 	details.WriteString(fmt.Sprintf("  Node RPC: %s\n", seq.Config.NodeRPCURL))
 	details.WriteString(fmt.Sprintf("  Raft Address: %s\n", seq.Config.RaftAddr))
 
 	// Block information if available
 	if seq.Status.UnsafeL2 != nil {
-		details.WriteString("\n[aqua]Block Information:[-]\n")
+		details.WriteString(fmt.Sprintf("\n[%s]Block Information:[-]\n", d.theme.PrimaryColor.String()))
 		details.WriteString(fmt.Sprintf("  Number: %d\n", seq.Status.UnsafeL2.Number))
 		details.WriteString(fmt.Sprintf("  Hash: %s\n", seq.Status.UnsafeL2.Hash.String()))
 		details.WriteString(fmt.Sprintf("  Parent Hash: %s\n", seq.Status.UnsafeL2.ParentHash.String()))
@@ -93,7 +93,7 @@ func (d *DetailsPanel) updateContent(seq *sequencer.Sequencer) {
 
 	// Timing information
 	if !seq.Status.LastUpdateTime.IsZero() {
-		details.WriteString("\n[aqua]Timing:[-]\n")
+		details.WriteString(fmt.Sprintf("\n[%s]Timing:[-]\n", d.theme.PrimaryColor.String()))
 		details.WriteString(fmt.Sprintf("  Last Update: %s\n", seq.Status.LastUpdateTime.Format(time.RFC3339)))
 		details.WriteString(fmt.Sprintf("  Time Since Update: %s\n", time.Since(seq.Status.LastUpdateTime).Round(time.Second)))
 	}
@@ -104,9 +104,9 @@ func (d *DetailsPanel) updateContent(seq *sequencer.Sequencer) {
 // formatBooleanStatus formats a boolean with color
 func (d *DetailsPanel) formatBooleanStatus(status bool) string {
 	if status {
-		return "[green]✓ Yes[-]"
+		return fmt.Sprintf("[%s]✓ Yes[-]", d.theme.SuccessColor.String())
 	}
-	return "[red]✗ No[-]"
+	return fmt.Sprintf("[%s]✗ No[-]", d.theme.ErrorColor.String())
 }
 
 // SetData updates the details panel with selected sequencer (called by MainView)

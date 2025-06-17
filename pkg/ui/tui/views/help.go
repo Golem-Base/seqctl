@@ -42,19 +42,19 @@ func (v *HelpView) updateContent() {
 	help.WriteString("[::b]GB Conductor Ops - Keyboard Shortcuts[::-]\n\n")
 
 	// Navigation section
-	help.WriteString("[aqua]Navigation:[-]\n")
+	help.WriteString(fmt.Sprintf("[%s]Navigation:[-]\n", v.theme.PrimaryColor.String()))
 	help.WriteString("  ↑/↓       Move selection up/down\n")
 	help.WriteString("  j/k       Move selection down/up (vim-style)\n")
 	help.WriteString("  Enter     Show quick actions for selected sequencer\n")
 	help.WriteString("  i         Toggle info panel visibility\n\n")
 
 	// Operations section
-	help.WriteString("[aqua]Sequencer Operations:[-]\n")
+	help.WriteString(fmt.Sprintf("[%s]Sequencer Operations:[-]\n", v.theme.PrimaryColor.String()))
 	actions := actions.AllActions
 	for _, action := range actions {
-		color := "white"
+		color := v.theme.SecondaryColor.String()
 		if action.Dangerous {
-			color = "orange"
+			color = v.theme.DangerColor.String()
 		}
 
 		help.WriteString(fmt.Sprintf("  [%s]%c[-]         %s\n", color, action.Key, action.Description))
@@ -62,7 +62,7 @@ func (v *HelpView) updateContent() {
 	help.WriteString("\n")
 
 	// General section
-	help.WriteString("[aqua]General:[-]\n")
+	help.WriteString(fmt.Sprintf("[%s]General:[-]\n", v.theme.PrimaryColor.String()))
 	help.WriteString("  r         Refresh data\n")
 	help.WriteString("  a         Toggle auto-refresh\n")
 	help.WriteString("  ?         Show this help\n")
@@ -70,10 +70,10 @@ func (v *HelpView) updateContent() {
 	help.WriteString("  Ctrl+C    Force quit\n\n")
 
 	// Notes
-	help.WriteString("[dim]Notes:[-]\n")
-	help.WriteString("[dim]- Operations apply to the currently highlighted sequencer[-]\n")
-	help.WriteString("[dim]- Orange operations are potentially dangerous[-]\n")
-	help.WriteString("[dim]- Some operations may be disabled based on sequencer state[-]\n")
+	help.WriteString(fmt.Sprintf("[%s]Notes:[-]\n", v.theme.SecondaryColor.String()))
+	help.WriteString(fmt.Sprintf("[%s]- Operations apply to the currently highlighted sequencer[-]\n", v.theme.SecondaryColor.String()))
+	help.WriteString(fmt.Sprintf("[%s]- Orange operations are potentially dangerous[-]\n", v.theme.SecondaryColor.String()))
+	help.WriteString(fmt.Sprintf("[%s]- Some operations may be disabled based on sequencer state[-]\n", v.theme.SecondaryColor.String()))
 
 	v.TextView.SetText(help.String())
 }

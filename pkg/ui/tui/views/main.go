@@ -41,9 +41,9 @@ type MainView struct {
 	detailsPanel   *components.DetailsPanel
 	operationsView *tview.TextView
 	infoPanel      *tview.Flex
-	
+
 	// Content area (switches between table/loading/error)
-	contentArea    *tview.Flex
+	contentArea *tview.Flex
 
 	// Models
 	appModel       *model.AppModel
@@ -121,7 +121,7 @@ func (v *MainView) createComponents() {
 	v.table = components.NewSequencerTable(v.theme)
 	v.loadingState = components.NewLoadingState(v.theme)
 	v.errorState = components.NewErrorState(v.theme)
-	
+
 	// Setup table selection callback
 	v.table.SetOnSelectionChanged(func(index int) {
 		if index >= 0 {
@@ -155,10 +155,10 @@ func (v *MainView) setupLayout() {
 	// Content area that switches between states
 	v.contentArea = tview.NewFlex().
 		SetDirection(tview.FlexColumn)
-	
+
 	// Start with loading state
 	v.showLoadingState()
-	
+
 	// Main content area (contentArea will manage the layout based on state)
 	mainContent := v.contentArea
 
@@ -191,21 +191,21 @@ func (v *MainView) updateHeader() {
 	lastUpdate := v.appModel.GetLastUpdate()
 
 	// Connection status based on whether we have recent data
-	connectionStatus := "[green]Connected[-]"
+	connectionStatus := fmt.Sprintf("[%s]Connected[-]", v.theme.SuccessColor.String())
 	if lastUpdate.IsZero() {
-		connectionStatus = "[yellow]Connecting...[-]"
+		connectionStatus = fmt.Sprintf("[%s]Connecting...[-]", v.theme.WarningColor.String())
 	} else if time.Since(lastUpdate) > 30*time.Second {
-		connectionStatus = "[red]Disconnected[-]"
+		connectionStatus = fmt.Sprintf("[%s]Disconnected[-]", v.theme.ErrorColor.String())
 	}
 
 	// Build header
 	var header string
 	if lastUpdate.IsZero() {
-		header = fmt.Sprintf("%s Network: [aqua]%s[-] | Status: %s | [yellow]Loading data...[-]",
-			v.icons.Network, network.Name(), connectionStatus)
+		header = fmt.Sprintf("%s Network: [%s]%s[-] | Status: %s | [%s]Loading data...[-]",
+			v.icons.Network, v.theme.PrimaryColor.String(), network.Name(), connectionStatus, v.theme.WarningColor.String())
 	} else {
-		header = fmt.Sprintf("%s Network: [aqua]%s[-] | Status: %s | Last Update: %s",
-			v.icons.Network, network.Name(), connectionStatus,
+		header = fmt.Sprintf("%s Network: [%s]%s[-] | Status: %s | Last Update: %s",
+			v.icons.Network, v.theme.PrimaryColor.String(), network.Name(), connectionStatus,
 			lastUpdate.Format("15:04:05"),
 		)
 	}
@@ -221,12 +221,12 @@ func (v *MainView) updateOperationsView() {
 	for _, action := range actions.GetVisibleActions() {
 		enabled := action.Enabled == nil || (selected != nil && action.Enabled(selected))
 
-		color := "aqua"
+		color := v.theme.PrimaryColor.String()
 		if action.Dangerous {
-			color = "orange"
+			color = v.theme.DangerColor.String()
 		}
 		if !enabled {
-			color = "dim"
+			color = v.theme.SecondaryColor.String()
 		}
 
 		text += fmt.Sprintf("[%s]%c[-] %s\n", color, action.Key, action.Description)
@@ -237,7 +237,7 @@ func (v *MainView) updateOperationsView() {
 
 // getFooterText returns the footer help text
 func (v *MainView) getFooterText() string {
-	return "[dim] 1: Table | 2: Details | Move: ↑↓/j/k | Refresh: r | Auto-refresh: a | Details: i | Help: ? | Quit: q[-]"
+	return fmt.Sprintf("[%s] 1: Table | 2: Details | Move: ↑↓/j/k | Refresh: r | Auto-refresh: a | Details: i | Help: ? | Quit: q[-]", v.theme.SecondaryColor.String())
 }
 
 // GetContainer returns the root container
@@ -318,7 +318,7 @@ func (v *MainView) refresh() {
 	if v.currentState != StateLoading {
 		v.showLoadingState()
 	}
-	
+
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -368,11 +368,11 @@ func (v *MainView) OnDataChanged(sequencers []*sequencer.Sequencer) {
 		// Update table data and show data state
 		v.table.SetData(sequencers)
 		v.showDataState()
-		
+
 		// Update details panel with current sequencers
 		v.detailsPanel.UpdateData(sequencers)
 	}
-	
+
 	// Update MainView-specific UI elements
 	v.updateHeader()
 	v.updateOperationsView()
@@ -390,7 +390,7 @@ func (v *MainView) OnError(err error) {
 	if err != nil {
 		// Show error state
 		v.showErrorState(err)
-		
+
 		// Also show error in flash message
 		v.flashModel.Error(err.Error())
 	}
@@ -421,7 +421,7 @@ func (v *MainView) showDataState() {
 	v.currentState = StateData
 	v.contentArea.Clear()
 	v.contentArea.SetDirection(tview.FlexColumn)
-	
+
 	if v.showDetails {
 		v.contentArea.
 			AddItem(v.table, 0, 7, true).

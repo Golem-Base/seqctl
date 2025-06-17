@@ -15,12 +15,12 @@ type RefreshManager struct {
 	appModel   *model.AppModel
 	flashModel *model.FlashModel
 	app        *tview.Application
-	
+
 	// Protected state
 	mu       sync.RWMutex
 	enabled  bool
 	interval time.Duration
-	
+
 	// Runtime state
 	ticker *time.Ticker
 	cancel context.CancelFunc

@@ -1,6 +1,8 @@
 package components
 
 import (
+	"fmt"
+
 	"github.com/golem-base/seqctl/pkg/ui/tui/styles"
 	"github.com/rivo/tview"
 )
@@ -36,7 +38,7 @@ func (l *LoadingState) ShowLoading(message string) {
 	if message == "" {
 		message = "Loading sequencers..."
 	}
-	l.TextView.SetText("[yellow]" + message + "[-]")
+	l.TextView.SetText(fmt.Sprintf("[%s]%s[-]", l.theme.WarningColor.String(), message))
 }
 
 // ShowEmpty displays an empty state message
@@ -44,5 +46,5 @@ func (l *LoadingState) ShowEmpty(message string) {
 	if message == "" {
 		message = "No sequencers found"
 	}
-	l.TextView.SetText("[dim]" + message + "[-]")
+	l.TextView.SetText(fmt.Sprintf("[%s]%s[-]", l.theme.SecondaryColor.String(), message))
 }

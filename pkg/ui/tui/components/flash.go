@@ -46,16 +46,16 @@ func (f *FlashMessage) OnFlashMessage(msg model.FlashMessage) {
 
 	switch msg.Level {
 	case model.FlashInfo:
-		color = "lightblue"
+		color = f.theme.InfoColor.String()
 		prefix = "ℹ️"
 	case model.FlashSuccess:
-		color = "green"
+		color = f.theme.SuccessColor.String()
 		prefix = "✓"
 	case model.FlashWarning:
-		color = "orange"
+		color = f.theme.WarningColor.String()
 		prefix = "⚠️"
 	case model.FlashError:
-		color = "red"
+		color = f.theme.ErrorColor.String()
 		prefix = "✗"
 	}
 

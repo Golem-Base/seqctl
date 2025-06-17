@@ -23,6 +23,7 @@ type DialogManager struct {
 	pages      *tview.Pages
 	dialog     *components.Dialog
 	flashModel *model.FlashModel
+	theme      *styles.Theme
 	templates  map[string]ConfirmationTemplate
 }
 
@@ -32,10 +33,18 @@ func NewDialogManager(pages *tview.Pages, flashModel *model.FlashModel, theme *s
 		pages:      pages,
 		dialog:     components.NewDialog(theme),
 		flashModel: flashModel,
+		theme:      theme,
 	}
 
 	// Initialize confirmation templates
-	dm.templates = map[string]ConfirmationTemplate{
+	dm.templates = dm.createTemplates()
+
+	return dm
+}
+
+// createTemplates creates confirmation templates using theme colors
+func (dm *DialogManager) createTemplates() map[string]ConfirmationTemplate {
+	return map[string]ConfirmationTemplate{
 		actions.ActionNamePause: {
 			Title:     "Pause Conductor",
 			Message:   "Network: %s\nSequencer: %s\n\nThis will pause the conductor.",
@@ -43,37 +52,35 @@ func NewDialogManager(pages *tview.Pages, flashModel *model.FlashModel, theme *s
 		},
 		actions.ActionNameHaltSequencer: {
 			Title:     "Halt Sequencer",
-			Message:   "Network: %s\nSequencer: %s\n\n[red]⚠️  This will stop the sequencer from producing blocks[-]",
+			Message:   fmt.Sprintf("Network: %%s\nSequencer: %%s\n\n[%s]⚠️  This will stop the sequencer from producing blocks[-]", dm.theme.ErrorColor.String()),
 			Dangerous: true,
 		},
 		actions.ActionNameOverrideLeader: {
 			Title:     "Override Leader",
-			Message:   "Set leader override for sequencer %s?\n\nNetwork: %s\nSequencer: %s\n\n[orange]⚠️  This will force the sequencer to act as leader regardless of cluster state[-]",
+			Message:   fmt.Sprintf("Set leader override for sequencer %%s?\n\nNetwork: %%s\nSequencer: %%s\n\n[%s]⚠️  This will force the sequencer to act as leader regardless of cluster state[-]", dm.theme.WarningColor.String()),
 			Dangerous: true,
 		},
 		actions.ActionNameTransferLeader: {
 			Title:     "Transfer Leadership",
-			Message:   "Transfer leadership to sequencer %s?\n\nNetwork: %s\nTarget: %s\n\n[orange]⚠️  This will change the current leader[-]",
+			Message:   fmt.Sprintf("Transfer leadership to sequencer %%s?\n\nNetwork: %%s\nTarget: %%s\n\n[%s]⚠️  This will change the current leader[-]", dm.theme.WarningColor.String()),
 			Dangerous: true,
 		},
 		actions.ActionNameForceActive: {
 			Title:     "Force Active Sequencer",
-			Message:   "Force sequencer %s to become active?\n\nNetwork: %s\nSequencer: %s\n\n[red]⚠️  This may disrupt consensus if another sequencer is active[-]",
+			Message:   fmt.Sprintf("Force sequencer %%s to become active?\n\nNetwork: %%s\nSequencer: %%s\n\n[%s]⚠️  This may disrupt consensus if another sequencer is active[-]", dm.theme.ErrorColor.String()),
 			Dangerous: true,
 		},
 		actions.ActionNameRemoveServer: {
 			Title:     "Remove Server",
-			Message:   "Remove sequencer %s from cluster?\n\nNetwork: %s\nSequencer: %s\n\n[red]⚠️  This operation is irreversible and will permanently remove the server[-]",
+			Message:   fmt.Sprintf("Remove sequencer %%s from cluster?\n\nNetwork: %%s\nSequencer: %%s\n\n[%s]⚠️  This operation is irreversible and will permanently remove the server[-]", dm.theme.ErrorColor.String()),
 			Dangerous: true,
 		},
 		actions.ActionNameUpdateMembership: {
 			Title:     "Update Cluster Membership",
-			Message:   "Update cluster membership from sequencer %s?\n\nNetwork: %s\nSequencer: %s (Leader)\n\n[orange]⚠️  This will reconfigure the entire cluster[-]",
+			Message:   fmt.Sprintf("Update cluster membership from sequencer %%s?\n\nNetwork: %%s\nSequencer: %%s (Leader)\n\n[%s]⚠️  This will reconfigure the entire cluster[-]", dm.theme.WarningColor.String()),
 			Dangerous: true,
 		},
 	}
-
-	return dm
 }
 
 // ShowActionConfirmation displays appropriate confirmation for the action
@@ -95,7 +102,7 @@ func (dm *DialogManager) ShowActionConfirmation(
 		// Handle special case for override leader (toggle behavior)
 		message := template.Message
 		if action.Name == actions.ActionNameOverrideLeader && seq.Status.ConductorLeader {
-			message = "Remove leader override for sequencer %s?\n\nNetwork: %s\nSequencer: %s\n\n[orange]⚠️  Removing the override requires manually restarting the op-node pod[-]"
+			message = fmt.Sprintf("Remove leader override for sequencer %%s?\n\nNetwork: %%s\nSequencer: %%s\n\n[%s]⚠️  Removing the override requires manually restarting the op-node pod[-]", dm.theme.WarningColor.String())
 		}
 
 		// Handle special case for pause (multiple vs single)
@@ -108,8 +115,8 @@ func (dm *DialogManager) ShowActionConfirmation(
 		}
 	} else {
 		// Fallback for unknown actions
-		message := fmt.Sprintf("Execute dangerous action '%s' on sequencer %s?\n\n[red]⚠️  This operation may affect network stability[-]",
-			action.Description, seq.Config.ID)
+		message := fmt.Sprintf("Execute dangerous action '%s' on sequencer %s?\n\n[%s]⚠️  This operation may affect network stability[-]",
+			action.Description, seq.Config.ID, dm.theme.ErrorColor.String())
 		dm.dialog.ShowConfirm("Confirm Dangerous Action", message, true, confirmCallback, cancelCallback)
 	}
 

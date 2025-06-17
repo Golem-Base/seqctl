@@ -29,6 +29,11 @@ type Theme struct {
 	WarningColor tcell.Color
 	InfoColor    tcell.Color
 
+	// Text styling colors
+	PrimaryColor   tcell.Color
+	SecondaryColor tcell.Color
+	DangerColor    tcell.Color
+
 	// Special colors
 	LeaderColor tcell.Color
 }
@@ -59,6 +64,11 @@ func Default() *Theme {
 		WarningColor: tcell.ColorDarkOrange,
 		InfoColor:    tcell.ColorLightSkyBlue,
 
+		// Text styling colors
+		PrimaryColor:   tcell.ColorAqua,
+		SecondaryColor: tcell.ColorWhite,
+		DangerColor:    tcell.ColorRed,
+
 		// Special colors
 		LeaderColor: tcell.ColorGold,
 	}
@@ -84,20 +94,4 @@ func DefaultIcons() *Icons {
 		Leader:   "👑",
 		Empty:    "—",
 	}
-}
-
-// FormatBooleanColored formats a boolean value with colored icon
-func FormatBooleanColored(status bool, icons *Icons) string {
-	if status {
-		return "[green]" + icons.Active + "[-]"
-	}
-	return "[red]" + icons.Inactive + "[-]"
-}
-
-// FormatLeaderIcon formats leader status for icon column (empty if not leader)
-func FormatLeaderIcon(isLeader bool, icons *Icons) string {
-	if isLeader {
-		return icons.Leader
-	}
-	return ""
 }

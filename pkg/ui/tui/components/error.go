@@ -36,11 +36,11 @@ func NewErrorState(theme *styles.Theme) *ErrorState {
 // ShowError displays an error message
 func (e *ErrorState) ShowError(err error) {
 	if err == nil {
-		e.TextView.SetText("[red]Unknown error occurred[-]")
+		e.TextView.SetText(fmt.Sprintf("[%s]Unknown error occurred[-]", e.theme.ErrorColor.String()))
 		return
 	}
-	
-	message := fmt.Sprintf("[red]Error: %s[-]\n\n[dim]Press 'r' to retry[-]", err.Error())
+
+	message := fmt.Sprintf("[%s]Error: %s[-]\n\n[%s]Press 'r' to retry[-]", e.theme.ErrorColor.String(), err.Error(), e.theme.SecondaryColor.String())
 	e.TextView.SetText(message)
 }
 
@@ -49,7 +49,7 @@ func (e *ErrorState) ShowConnectionError(message string) {
 	if message == "" {
 		message = "Failed to connect to Kubernetes cluster"
 	}
-	
-	errorText := fmt.Sprintf("[red]Connection Error[-]\n\n%s\n\n[dim]Check your kubeconfig and cluster connection[-]", message)
+
+	errorText := fmt.Sprintf("[%s]Connection Error[-]\n\n%s\n\n[%s]Check your kubeconfig and cluster connection[-]", e.theme.ErrorColor.String(), message, e.theme.SecondaryColor.String())
 	e.TextView.SetText(errorText)
 }
