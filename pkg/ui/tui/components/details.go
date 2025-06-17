@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/golem-base/seqctl/pkg/sequencer"
-	"github.com/golem-base/seqctl/pkg/ui/tui/model"
 	"github.com/golem-base/seqctl/pkg/ui/tui/styles"
 	"github.com/rivo/tview"
 )
@@ -15,16 +14,14 @@ import (
 type DetailsPanel struct {
 	*tview.TextView
 
-	model   *model.AppModel
 	theme   *styles.Theme
 	current *sequencer.Sequencer
 }
 
 // NewDetailsPanel creates a new details panel component
-func NewDetailsPanel(appModel *model.AppModel, theme *styles.Theme) *DetailsPanel {
+func NewDetailsPanel(theme *styles.Theme) *DetailsPanel {
 	panel := &DetailsPanel{
 		TextView: tview.NewTextView(),
-		model:    appModel,
 		theme:    theme,
 	}
 

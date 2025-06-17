@@ -5,7 +5,6 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/golem-base/seqctl/pkg/sequencer"
-	"github.com/golem-base/seqctl/pkg/ui/tui/model"
 	"github.com/golem-base/seqctl/pkg/ui/tui/styles"
 	"github.com/rivo/tview"
 )
@@ -14,22 +13,22 @@ import (
 type SequencerTable struct {
 	*tview.Table
 
-	model              *model.AppModel
 	theme              *styles.Theme
 	icons              *styles.Icons
 	onSelectionChanged func(int)
-
-	// Cache
-	lastSequencerCount int
+	
+	// Current data
+	sequencers    []*sequencer.Sequencer
+	selectedIndex int
 }
 
 // NewSequencerTable creates a new sequencer table component
-func NewSequencerTable(appModel *model.AppModel, theme *styles.Theme) *SequencerTable {
+func NewSequencerTable(theme *styles.Theme) *SequencerTable {
 	table := &SequencerTable{
-		Table: tview.NewTable(),
-		model: appModel,
-		theme: theme,
-		icons: styles.DefaultIcons(),
+		Table:         tview.NewTable(),
+		theme:         theme,
+		icons:         styles.DefaultIcons(),
+		selectedIndex: -1,
 	}
 
 	// Configure base table
@@ -56,13 +55,10 @@ func NewSequencerTable(appModel *model.AppModel, theme *styles.Theme) *Sequencer
 	// Setup headers
 	table.setupHeaders()
 
-	// Show initial loading state
-	table.showLoadingState()
-
 	// Handle selection changes
 	table.Table.SetSelectionChangedFunc(func(row, column int) {
-		if row > 0 {
-			table.model.SetSelectedIndex(row - 1)
+		if row > 0 && row-1 < len(table.sequencers) {
+			table.selectedIndex = row - 1
 			if table.onSelectionChanged != nil {
 				table.onSelectionChanged(row - 1)
 			}
@@ -109,15 +105,14 @@ func (t *SequencerTable) setupHeaders() {
 }
 
 // updateTable populates the table with sequencer data
-func (t *SequencerTable) updateTable(sequencers []*sequencer.Sequencer) {
-	// Show error if no sequencers
-	if len(sequencers) == 0 {
-		t.showError("No sequencers found - check Kubernetes connection and labels")
-		return
+func (t *SequencerTable) updateTable() {
+	// Clear existing data rows (keep header)
+	for t.Table.GetRowCount() > 1 {
+		t.Table.RemoveRow(1)
 	}
 
 	// Update each row
-	for i, seq := range sequencers {
+	for i, seq := range t.sequencers {
 		row := i + 1 // Account for header row
 
 		// Create cells for each column
@@ -179,44 +174,16 @@ func (t *SequencerTable) updateTable(sequencers []*sequencer.Sequencer) {
 		}
 	}
 
-	// Remove extra rows if the count decreased
-	t.trimTableRows(len(sequencers) + 1)
-	t.lastSequencerCount = len(sequencers)
-
-	// Maintain selection, or select first row if none selected
-	selectedIndex := t.model.GetSelectedIndex()
-	if selectedIndex >= 0 && selectedIndex < len(sequencers) {
-		t.Table.Select(selectedIndex+1, 0)
-	} else if len(sequencers) > 0 && selectedIndex < 0 {
-		// Select first row if nothing is selected
+	// Maintain or set selection
+	if t.selectedIndex >= 0 && t.selectedIndex < len(t.sequencers) {
+		t.Table.Select(t.selectedIndex+1, 0)
+	} else if len(t.sequencers) > 0 {
+		// Select first row if nothing is selected or selection is out of bounds
+		t.selectedIndex = 0
 		t.Table.Select(1, 0)
-		t.model.SetSelectedIndex(0)
-	}
-}
-
-// showError displays an error message in the table
-func (t *SequencerTable) showError(message string) {
-	// Clear leader icon column
-	t.Table.SetCell(1, 0, tview.NewTableCell(""))
-
-	// Show error in ID column
-	t.Table.SetCell(1, 1, tview.NewTableCell(message).
-		SetAlign(tview.AlignCenter).
-		SetTextColor(t.theme.ErrorColor))
-
-	// Clear other columns
-	for col := 2; col < 6; col++ {
-		t.Table.SetCell(1, col, tview.NewTableCell(""))
-	}
-
-	// Remove extra rows
-	t.trimTableRows(2)
-}
-
-// trimTableRows removes rows beyond the specified count
-func (t *SequencerTable) trimTableRows(targetRows int) {
-	for t.Table.GetRowCount() > targetRows {
-		t.Table.RemoveRow(t.Table.GetRowCount() - 1)
+		if t.onSelectionChanged != nil {
+			t.onSelectionChanged(0)
+		}
 	}
 }
 
@@ -255,29 +222,19 @@ func (t *SequencerTable) NavigateDown() {
 
 // SetData updates the table with new sequencer data (called by MainView)
 func (t *SequencerTable) SetData(sequencers []*sequencer.Sequencer) {
-	t.updateTable(sequencers)
+	t.sequencers = sequencers
+	t.updateTable()
 }
 
-// ShowError displays an error in the table (called by MainView)
-func (t *SequencerTable) ShowError(message string) {
-	t.showError(message)
-}
-
-// showLoadingState displays a loading message
-func (t *SequencerTable) showLoadingState() {
-	// Clear leader icon column
-	t.Table.SetCell(1, 0, tview.NewTableCell(""))
-
-	// Show loading in ID column
-	t.Table.SetCell(1, 1, tview.NewTableCell("[yellow]Loading sequencers...[-]").
-		SetAlign(tview.AlignCenter).
-		SetExpansion(3))
-
-	// Clear other columns
-	for col := 2; col < 6; col++ {
-		t.Table.SetCell(1, col, tview.NewTableCell(""))
+// SetSelectedIndex sets the selected sequencer index
+func (t *SequencerTable) SetSelectedIndex(index int) {
+	if index >= 0 && index < len(t.sequencers) {
+		t.selectedIndex = index
+		t.Table.Select(index+1, 0) // +1 for header row
 	}
+}
 
-	// Remove any extra rows
-	t.trimTableRows(2)
+// GetSelectedIndex returns the current selected index  
+func (t *SequencerTable) GetSelectedIndex() int {
+	return t.selectedIndex
 }

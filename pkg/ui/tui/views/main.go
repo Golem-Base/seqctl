@@ -36,9 +36,14 @@ type MainView struct {
 
 	// Main components
 	table          *components.SequencerTable
+	loadingState   *components.LoadingState
+	errorState     *components.ErrorState
 	detailsPanel   *components.DetailsPanel
 	operationsView *tview.TextView
 	infoPanel      *tview.Flex
+	
+	// Content area (switches between table/loading/error)
+	contentArea    *tview.Flex
 
 	// Models
 	appModel       *model.AppModel
@@ -49,9 +54,20 @@ type MainView struct {
 	showDetails     bool
 	focusedPanel    int
 	focusablePanels []tview.Primitive
+	currentState    ViewState
 	theme           *styles.Theme
 	icons           *styles.Icons
 }
+
+// ViewState represents the current state of the main view
+type ViewState int
+
+const (
+	StateLoading ViewState = iota
+	StateError
+	StateData
+	StateEmpty
+)
 
 // NewMainView creates the main sequencer view
 func NewMainView(appModel *model.AppModel, flashModel *model.FlashModel, refreshManager RefreshManager) *MainView {
@@ -61,6 +77,7 @@ func NewMainView(appModel *model.AppModel, flashModel *model.FlashModel, refresh
 		refreshManager: refreshManager,
 		showDetails:    true,
 		focusedPanel:   FocusTable,
+		currentState:   StateLoading,
 		theme:          styles.Default(),
 		icons:          styles.DefaultIcons(),
 	}
@@ -100,11 +117,20 @@ func (v *MainView) createComponents() {
 	// Flash messages
 	v.flashMessage = components.NewFlashMessage(v.flashModel, v.theme)
 
-	// Table
-	v.table = components.NewSequencerTable(v.appModel, v.theme)
+	// Table and state components
+	v.table = components.NewSequencerTable(v.theme)
+	v.loadingState = components.NewLoadingState(v.theme)
+	v.errorState = components.NewErrorState(v.theme)
+	
+	// Setup table selection callback
+	v.table.SetOnSelectionChanged(func(index int) {
+		if index >= 0 {
+			v.appModel.SetSelectedIndex(index)
+		}
+	})
 
 	// Details panel
-	v.detailsPanel = components.NewDetailsPanel(v.appModel, v.theme)
+	v.detailsPanel = components.NewDetailsPanel(v.theme)
 
 	// Operations view
 	v.operationsView = tview.NewTextView()
@@ -126,11 +152,15 @@ func (v *MainView) setupLayout() {
 		AddItem(detailsSection, 0, 2, false).
 		AddItem(operationsSection, 0, 1, false)
 
-	// Main content area
-	mainContent := tview.NewFlex().
-		SetDirection(tview.FlexColumn).
-		AddItem(v.table, 0, 7, true).
-		AddItem(v.infoPanel, 0, 3, false)
+	// Content area that switches between states
+	v.contentArea = tview.NewFlex().
+		SetDirection(tview.FlexColumn)
+	
+	// Start with loading state
+	v.showLoadingState()
+	
+	// Main content area (contentArea will manage the layout based on state)
+	mainContent := v.contentArea
 
 	// Complete layout
 	v.container = tview.NewFlex().
@@ -284,6 +314,11 @@ func (v *MainView) HandleKey(event *tcell.EventKey) *tcell.EventKey {
 
 // refresh triggers a data refresh
 func (v *MainView) refresh() {
+	// Show loading state before starting refresh
+	if v.currentState != StateLoading {
+		v.showLoadingState()
+	}
+	
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -315,16 +350,9 @@ func (v *MainView) toggleDetails() {
 		v.focusedPanel = FocusTable
 	}
 
-	// Rebuild main content
-	mainContent := v.container.GetItem(2).(*tview.Flex)
-	mainContent.Clear()
-
-	if v.showDetails {
-		mainContent.
-			AddItem(v.table, 0, 7, true).
-			AddItem(v.infoPanel, 0, 3, false)
-	} else {
-		mainContent.AddItem(v.table, 0, 1, true)
+	// If we're in data state, refresh the layout
+	if v.currentState == StateData {
+		v.showDataState()
 	}
 }
 
@@ -334,10 +362,17 @@ func (v *MainView) Focus() {
 
 // Implement model.AppListener interface - MainView coordinates all UI updates
 func (v *MainView) OnDataChanged(sequencers []*sequencer.Sequencer) {
-	// Update all components with new data
-	v.table.SetData(sequencers)
-	v.detailsPanel.UpdateData(sequencers)
-
+	if len(sequencers) == 0 {
+		v.showEmptyState()
+	} else {
+		// Update table data and show data state
+		v.table.SetData(sequencers)
+		v.showDataState()
+		
+		// Update details panel with current sequencers
+		v.detailsPanel.UpdateData(sequencers)
+	}
+	
 	// Update MainView-specific UI elements
 	v.updateHeader()
 	v.updateOperationsView()
@@ -353,14 +388,53 @@ func (v *MainView) OnSelectionChanged(seq *sequencer.Sequencer) {
 
 func (v *MainView) OnError(err error) {
 	if err != nil {
-		// Show error in flash message
+		// Show error state
+		v.showErrorState(err)
+		
+		// Also show error in flash message
 		v.flashModel.Error(err.Error())
-
-		// Also show error in table if it's a data error
-		v.table.ShowError(err.Error())
 	}
 }
 
 func (v *MainView) OnRefreshCompleted(t time.Time) {
 	v.updateHeader()
+}
+
+// State transition methods
+func (v *MainView) showLoadingState() {
+	v.currentState = StateLoading
+	v.contentArea.Clear()
+	v.contentArea.SetDirection(tview.FlexRow)
+	v.contentArea.AddItem(v.loadingState, 0, 1, true)
+	v.loadingState.ShowLoading("")
+}
+
+func (v *MainView) showErrorState(err error) {
+	v.currentState = StateError
+	v.contentArea.Clear()
+	v.contentArea.SetDirection(tview.FlexRow)
+	v.contentArea.AddItem(v.errorState, 0, 1, true)
+	v.errorState.ShowError(err)
+}
+
+func (v *MainView) showDataState() {
+	v.currentState = StateData
+	v.contentArea.Clear()
+	v.contentArea.SetDirection(tview.FlexColumn)
+	
+	if v.showDetails {
+		v.contentArea.
+			AddItem(v.table, 0, 7, true).
+			AddItem(v.infoPanel, 0, 3, false)
+	} else {
+		v.contentArea.AddItem(v.table, 0, 1, true)
+	}
+}
+
+func (v *MainView) showEmptyState() {
+	v.currentState = StateEmpty
+	v.contentArea.Clear()
+	v.contentArea.SetDirection(tview.FlexRow)
+	v.contentArea.AddItem(v.loadingState, 0, 1, true)
+	v.loadingState.ShowEmpty("No sequencers found - check Kubernetes connection and labels")
 }
