@@ -21,6 +21,9 @@ type SequencerTable struct {
 	// Current data
 	sequencers    []*sequencer.Sequencer
 	selectedIndex int
+
+	// Multi-selection support
+	marks map[string]struct{}
 }
 
 // NewSequencerTable creates a new sequencer table component
@@ -30,6 +33,7 @@ func NewSequencerTable(theme *styles.Theme) *SequencerTable {
 		theme:         theme,
 		icons:         styles.DefaultIcons(),
 		selectedIndex: -1,
+		marks:         make(map[string]struct{}),
 	}
 
 	// Configure base table
@@ -171,8 +175,18 @@ func (t *SequencerTable) updateTable() {
 				SetAlign(cellData.align).
 				SetExpansion(cellData.expansion)
 
-			// Only set color if the text doesn't already contain color codes
-			if !strings.Contains(cellData.text, "[") {
+			// Set sequencer ID as reference in first column for selection tracking
+			if col == 0 {
+				cell.SetReference(seq.Config.ID)
+			}
+
+			// Apply marked styling if this sequencer is marked
+			isMarked := t.IsMarked(seq.Config.ID)
+			if isMarked {
+				// Use theme's mark color for marked items
+				cell.SetTextColor(t.theme.MarkColor)
+			} else if !strings.Contains(cellData.text, "[") {
+				// Only set color if the text doesn't already contain color codes and not marked
 				cell.SetTextColor(cellData.color)
 			}
 
@@ -191,15 +205,6 @@ func (t *SequencerTable) updateTable() {
 			t.onSelectionChanged(0)
 		}
 	}
-}
-
-// Focus sets focus to the table
-func (t *SequencerTable) Focus(delegate func(p tview.Primitive)) {
-	row, _ := t.Table.GetSelection()
-	if row == 0 && t.Table.GetRowCount() > 1 {
-		t.Table.Select(1, 0)
-	}
-	t.Table.Focus(delegate)
 }
 
 // NavigateUp moves selection up
@@ -224,19 +229,6 @@ func (t *SequencerTable) SetData(sequencers []*sequencer.Sequencer) {
 	t.updateTable()
 }
 
-// SetSelectedIndex sets the selected sequencer index
-func (t *SequencerTable) SetSelectedIndex(index int) {
-	if index >= 0 && index < len(t.sequencers) {
-		t.selectedIndex = index
-		t.Table.Select(index+1, 0) // +1 for header row
-	}
-}
-
-// GetSelectedIndex returns the current selected index
-func (t *SequencerTable) GetSelectedIndex() int {
-	return t.selectedIndex
-}
-
 // formatBoolean formats a boolean value with colored icon
 func (t *SequencerTable) formatBoolean(status bool) string {
 	if status {
@@ -251,4 +243,134 @@ func (t *SequencerTable) formatLeaderIcon(isLeader bool) string {
 		return t.icons.Leader
 	}
 	return ""
+}
+
+// GetRowID returns the sequencer ID at given row index
+func (t *SequencerTable) GetRowID(index int) (string, bool) {
+	if index <= 0 || index > len(t.sequencers) {
+		return "", false
+	}
+	cell := t.Table.GetCell(index, 0)
+	if cell == nil {
+		return "", false
+	}
+	id, ok := cell.GetReference().(string)
+	return id, ok
+}
+
+// GetSelectedItem returns the currently selected sequencer ID
+func (t *SequencerTable) GetSelectedItem() string {
+	row, _ := t.Table.GetSelection()
+	if row <= 0 || row-1 >= len(t.sequencers) {
+		return ""
+	}
+	return t.sequencers[row-1].Config.ID
+}
+
+// GetSelectedItems returns all marked sequencer IDs, or current selection if none marked
+func (t *SequencerTable) GetSelectedItems() []string {
+	if len(t.marks) == 0 {
+		if item := t.GetSelectedItem(); item != "" {
+			return []string{item}
+		}
+		return nil
+	}
+
+	items := make([]string, 0, len(t.marks))
+	for item := range t.marks {
+		items = append(items, item)
+	}
+	return items
+}
+
+// IsMarked returns true if the sequencer is marked for multi-selection
+func (t *SequencerTable) IsMarked(id string) bool {
+	_, ok := t.marks[id]
+	return ok
+}
+
+// ToggleMark toggles the mark status of the currently selected sequencer
+func (t *SequencerTable) ToggleMark() {
+	sel := t.GetSelectedItem()
+	if sel == "" {
+		return
+	}
+
+	if _, ok := t.marks[sel]; ok {
+		delete(t.marks, sel)
+	} else {
+		t.marks[sel] = struct{}{}
+	}
+
+	// Refresh the table to update visual indicators
+	t.updateTable()
+}
+
+// ClearMarks removes all marks
+func (t *SequencerTable) ClearMarks() {
+	for k := range t.marks {
+		delete(t.marks, k)
+	}
+	// Refresh the table to update visual indicators
+	t.updateTable()
+}
+
+// SpanMark marks a range of sequencers from the last marked item to current selection
+func (t *SequencerTable) SpanMark() {
+	selIndex, _ := t.Table.GetSelection()
+	if selIndex <= 0 {
+		return
+	}
+
+	prev := -1
+	// Look back to find previous mark
+	for i := selIndex - 1; i > 0; i-- {
+		id, ok := t.GetRowID(i)
+		if !ok {
+			break
+		}
+		if _, ok := t.marks[id]; ok {
+			prev = i
+			break
+		}
+	}
+
+	if prev != -1 {
+		t.markRange(prev, selIndex)
+		return
+	}
+
+	// Look forward to see if we have a mark
+	for i := selIndex; i < t.Table.GetRowCount(); i++ {
+		id, ok := t.GetRowID(i)
+		if !ok {
+			break
+		}
+		if _, ok := t.marks[id]; ok {
+			prev = i
+			break
+		}
+	}
+	t.markRange(prev, selIndex)
+}
+
+// markRange marks sequencers in the given range
+func (t *SequencerTable) markRange(prev, curr int) {
+	if prev < 0 {
+		return
+	}
+	if prev > curr {
+		prev, curr = curr, prev
+	}
+
+	for i := prev + 1; i <= curr; i++ {
+		id, ok := t.GetRowID(i)
+		if !ok {
+			break
+		}
+		t.marks[id] = struct{}{}
+	}
+
+	// Refresh the table to update visual indicators
+	t.updateTable()
 }
