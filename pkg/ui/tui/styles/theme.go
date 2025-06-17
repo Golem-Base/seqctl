@@ -36,6 +36,7 @@ type Theme struct {
 
 	// Special colors
 	LeaderColor tcell.Color
+	MarkColor   tcell.Color
 }
 
 // Default returns the default theme
@@ -71,6 +72,46 @@ func Default() *Theme {
 
 		// Special colors
 		LeaderColor: tcell.ColorGold,
+		MarkColor:   tcell.ColorPurple,
+	}
+}
+
+// CatppuccinMocha returns the Catppuccin Mocha theme
+// A soothing pastel theme with warm colors on a dark background
+// To use this theme, replace styles.Default() with styles.CatppuccinMocha() in tui.go:42
+func CatppuccinMocha() *Theme {
+	return &Theme{
+		// Background color - Catppuccin Base
+		BackgroundColor: tcell.NewHexColor(0x1e1e2e),
+
+		// Border colors - Catppuccin Surface 1 and Lavender
+		BorderColor:      tcell.NewHexColor(0x45475a), // Surface 1
+		BorderFocusColor: tcell.NewHexColor(0xb4befe), // Lavender
+
+		// Selection colors - Catppuccin Surface 2 and Text
+		SelectedBg: tcell.NewHexColor(0x585b70), // Surface 2
+		SelectedFg: tcell.NewHexColor(0xcdd6f4), // Text
+
+		// Table colors - Catppuccin Text and Base
+		TableFg:  tcell.NewHexColor(0xcdd6f4), // Text
+		TableBg:  tcell.NewHexColor(0x1e1e2e), // Base
+		HeaderFg: tcell.NewHexColor(0xb4befe), // Lavender
+		HeaderBg: tcell.NewHexColor(0x1e1e2e), // Base
+
+		// Status colors - Catppuccin themed
+		SuccessColor: tcell.NewHexColor(0xa6e3a1), // Green
+		ErrorColor:   tcell.NewHexColor(0xf38ba8), // Red
+		WarningColor: tcell.NewHexColor(0xfab387), // Peach
+		InfoColor:    tcell.NewHexColor(0x89dceb), // Sky
+
+		// Text styling colors - Catppuccin themed
+		PrimaryColor:   tcell.NewHexColor(0x89b4fa), // Blue
+		SecondaryColor: tcell.NewHexColor(0xa6adc8), // Subtext 0
+		DangerColor:    tcell.NewHexColor(0xf38ba8), // Red
+
+		// Special colors - Catppuccin themed
+		LeaderColor: tcell.NewHexColor(0xf9e2af), // Yellow
+		MarkColor:   tcell.NewHexColor(0xcba6f7), // Mauve
 	}
 }
 
