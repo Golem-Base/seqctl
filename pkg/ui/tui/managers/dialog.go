@@ -1,10 +1,11 @@
-package components
+package managers
 
 import (
 	"fmt"
 
 	"github.com/golem-base/seqctl/pkg/sequencer"
 	"github.com/golem-base/seqctl/pkg/ui/tui/actions"
+	"github.com/golem-base/seqctl/pkg/ui/tui/components"
 	"github.com/golem-base/seqctl/pkg/ui/tui/model"
 	"github.com/golem-base/seqctl/pkg/ui/tui/styles"
 	"github.com/rivo/tview"
@@ -17,24 +18,24 @@ type ConfirmationTemplate struct {
 	Dangerous bool
 }
 
-// ConfirmationManager handles dangerous action confirmations
-type ConfirmationManager struct {
+// DialogManager handles dangerous action confirmations and other dialogs
+type DialogManager struct {
 	pages      *tview.Pages
-	dialog     *Dialog
+	dialog     *components.Dialog
 	flashModel *model.FlashModel
 	templates  map[string]ConfirmationTemplate
 }
 
-// NewConfirmationManager creates a new confirmation manager
-func NewConfirmationManager(pages *tview.Pages, flashModel *model.FlashModel, theme *styles.Theme) *ConfirmationManager {
-	cm := &ConfirmationManager{
+// NewDialogManager creates a new dialog manager
+func NewDialogManager(pages *tview.Pages, flashModel *model.FlashModel, theme *styles.Theme) *DialogManager {
+	dm := &DialogManager{
 		pages:      pages,
-		dialog:     NewDialog(theme),
+		dialog:     components.NewDialog(theme),
 		flashModel: flashModel,
 	}
 
 	// Initialize confirmation templates
-	cm.templates = map[string]ConfirmationTemplate{
+	dm.templates = map[string]ConfirmationTemplate{
 		actions.ActionNamePause: {
 			Title:     "Pause Conductor",
 			Message:   "Network: %s\nSequencer: %s\n\nThis will pause the conductor.",
@@ -72,11 +73,11 @@ func NewConfirmationManager(pages *tview.Pages, flashModel *model.FlashModel, th
 		},
 	}
 
-	return cm
+	return dm
 }
 
 // ShowActionConfirmation displays appropriate confirmation for the action
-func (cm *ConfirmationManager) ShowActionConfirmation(
+func (dm *DialogManager) ShowActionConfirmation(
 	action *actions.Action,
 	seq *sequencer.Sequencer,
 	networkName string,
@@ -84,13 +85,13 @@ func (cm *ConfirmationManager) ShowActionConfirmation(
 	onCancel func(),
 ) {
 	// Create wrapped callbacks that handle dialog cleanup
-	confirmCallback := cm.wrapCallback(onConfirm)
-	cancelCallback := cm.wrapCallback(onCancel, func() {
-		cm.flashModel.Info("Operation cancelled")
+	confirmCallback := dm.wrapCallback(onConfirm)
+	cancelCallback := dm.wrapCallback(onCancel, func() {
+		dm.flashModel.Info("Operation cancelled")
 	})
 
 	// Get template for this action
-	if template, exists := cm.templates[action.Name]; exists {
+	if template, exists := dm.templates[action.Name]; exists {
 		// Handle special case for override leader (toggle behavior)
 		message := template.Message
 		if action.Name == actions.ActionNameOverrideLeader && seq.Status.ConductorLeader {
@@ -99,27 +100,27 @@ func (cm *ConfirmationManager) ShowActionConfirmation(
 
 		// Handle special case for pause (multiple vs single)
 		if action.Name == actions.ActionNamePause {
-			cm.dialog.ShowPauseConfirm(seq.Config.ID, networkName, false, confirmCallback, cancelCallback)
+			dm.dialog.ShowPauseConfirm(seq.Config.ID, networkName, false, confirmCallback, cancelCallback)
 		} else {
 			// Format the message with sequencer and network info
 			formattedMessage := fmt.Sprintf(message, seq.Config.ID, networkName, seq.Config.ID)
-			cm.dialog.ShowConfirm(template.Title, formattedMessage, template.Dangerous, confirmCallback, cancelCallback)
+			dm.dialog.ShowConfirm(template.Title, formattedMessage, template.Dangerous, confirmCallback, cancelCallback)
 		}
 	} else {
 		// Fallback for unknown actions
 		message := fmt.Sprintf("Execute dangerous action '%s' on sequencer %s?\n\n[red]⚠️  This operation may affect network stability[-]",
 			action.Description, seq.Config.ID)
-		cm.dialog.ShowConfirm("Confirm Dangerous Action", message, true, confirmCallback, cancelCallback)
+		dm.dialog.ShowConfirm("Confirm Dangerous Action", message, true, confirmCallback, cancelCallback)
 	}
 
 	// Show the dialog
-	cm.showDialog()
+	dm.showDialog()
 }
 
 // wrapCallback wraps a callback to handle dialog cleanup
-func (cm *ConfirmationManager) wrapCallback(callback func(), fallback ...func()) func() {
+func (dm *DialogManager) wrapCallback(callback func(), fallback ...func()) func() {
 	return func() {
-		cm.hideDialog()
+		dm.hideDialog()
 		if callback != nil {
 			callback()
 		} else if len(fallback) > 0 && fallback[0] != nil {
@@ -129,17 +130,17 @@ func (cm *ConfirmationManager) wrapCallback(callback func(), fallback ...func())
 }
 
 // showDialog displays the confirmation dialog
-func (cm *ConfirmationManager) showDialog() {
-	cm.pages.AddPage("confirmation", cm.dialog, false, true)
+func (dm *DialogManager) showDialog() {
+	dm.pages.AddPage("confirmation", dm.dialog, false, true)
 }
 
 // hideDialog removes the confirmation dialog
-func (cm *ConfirmationManager) hideDialog() {
-	cm.pages.RemovePage("confirmation")
+func (dm *DialogManager) hideDialog() {
+	dm.pages.RemovePage("confirmation")
 }
 
 // IsVisible returns whether the confirmation dialog is currently visible
-func (cm *ConfirmationManager) IsVisible() bool {
-	frontPage, _ := cm.pages.GetFrontPage()
+func (dm *DialogManager) IsVisible() bool {
+	frontPage, _ := dm.pages.GetFrontPage()
 	return frontPage == "confirmation"
 }

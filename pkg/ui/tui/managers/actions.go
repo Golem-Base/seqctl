@@ -8,20 +8,19 @@ import (
 
 	"github.com/golem-base/seqctl/pkg/sequencer"
 	"github.com/golem-base/seqctl/pkg/ui/tui/actions"
-	"github.com/golem-base/seqctl/pkg/ui/tui/components"
 	"github.com/golem-base/seqctl/pkg/ui/tui/model"
 	"github.com/rivo/tview"
 )
 
 // ActionDispatcher handles action execution with proper error handling
 type ActionDispatcher struct {
-	appModel            *model.AppModel
-	flashModel          *model.FlashModel
-	app                 *tview.Application
-	confirmationManager *components.ConfirmationManager
-	refreshManager      *RefreshManager
-	readOnlyMode        bool
-	confirmDanger       bool
+	appModel      *model.AppModel
+	flashModel    *model.FlashModel
+	app           *tview.Application
+	dialogManager *DialogManager
+	refreshManager *RefreshManager
+	readOnlyMode  bool
+	confirmDanger bool
 }
 
 // NewActionDispatcher creates a new action dispatcher
@@ -29,17 +28,17 @@ func NewActionDispatcher(
 	appModel *model.AppModel,
 	flashModel *model.FlashModel,
 	app *tview.Application,
-	confirmationManager *components.ConfirmationManager,
+	dialogManager *DialogManager,
 	refreshManager *RefreshManager,
 ) *ActionDispatcher {
 	return &ActionDispatcher{
-		appModel:            appModel,
-		flashModel:          flashModel,
-		app:                 app,
-		confirmationManager: confirmationManager,
-		refreshManager:      refreshManager,
-		readOnlyMode:        false,
-		confirmDanger:       true,
+		appModel:       appModel,
+		flashModel:     flashModel,
+		app:            app,
+		dialogManager:  dialogManager,
+		refreshManager: refreshManager,
+		readOnlyMode:   false,
+		confirmDanger:  true,
 	}
 }
 
@@ -86,7 +85,7 @@ func (d *ActionDispatcher) SetConfirmDanger(confirm bool) {
 func (d *ActionDispatcher) showConfirmation(action *actions.Action, seq *sequencer.Sequencer) {
 	networkName := d.appModel.GetNetwork().Name()
 
-	d.confirmationManager.ShowActionConfirmation(
+	d.dialogManager.ShowActionConfirmation(
 		action,
 		seq,
 		networkName,

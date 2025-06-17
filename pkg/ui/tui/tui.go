@@ -6,7 +6,6 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/golem-base/seqctl/pkg/network"
 	"github.com/golem-base/seqctl/pkg/ui/tui/actions"
-	"github.com/golem-base/seqctl/pkg/ui/tui/components"
 	"github.com/golem-base/seqctl/pkg/ui/tui/managers"
 	"github.com/golem-base/seqctl/pkg/ui/tui/model"
 	"github.com/golem-base/seqctl/pkg/ui/tui/styles"
@@ -57,9 +56,9 @@ func NewTUI(network *network.Network) *TUI {
 	// Initialize navigation manager
 	tui.navigation = managers.NewNavigationManager(tui.app, tui.mainView, tui.helpView)
 
-	// Initialize confirmation manager and action dispatcher
-	confirmationManager := components.NewConfirmationManager(tui.navigation.GetPages(), tui.flashModel, tui.theme)
-	tui.actionDispatcher = managers.NewActionDispatcher(tui.appModel, tui.flashModel, tui.app, confirmationManager, tui.refresh)
+	// Initialize dialog manager and action dispatcher
+	dialogManager := managers.NewDialogManager(tui.navigation.GetPages(), tui.flashModel, tui.theme)
+	tui.actionDispatcher = managers.NewActionDispatcher(tui.appModel, tui.flashModel, tui.app, dialogManager, tui.refresh)
 
 	// Setup key handling
 	tui.setupKeyHandling()
