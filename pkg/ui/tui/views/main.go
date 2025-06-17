@@ -20,6 +20,12 @@ const (
 	FocusDetails
 )
 
+// RefreshManager interface to avoid circular import
+type RefreshManager interface {
+	IsEnabled() bool
+	SetEnabled(bool)
+}
+
 // MainView is the primary sequencer management view
 type MainView struct {
 	// Layout components
@@ -35,8 +41,9 @@ type MainView struct {
 	infoPanel      *tview.Flex
 
 	// Models
-	appModel   *model.AppModel
-	flashModel *model.FlashModel
+	appModel       *model.AppModel
+	flashModel     *model.FlashModel
+	refreshManager RefreshManager
 
 	// State
 	showDetails     bool
@@ -47,14 +54,15 @@ type MainView struct {
 }
 
 // NewMainView creates the main sequencer view
-func NewMainView(appModel *model.AppModel, flashModel *model.FlashModel) *MainView {
+func NewMainView(appModel *model.AppModel, flashModel *model.FlashModel, refreshManager RefreshManager) *MainView {
 	view := &MainView{
-		appModel:     appModel,
-		flashModel:   flashModel,
-		showDetails:  true,
-		focusedPanel: FocusTable,
-		theme:        styles.Default(),
-		icons:        styles.DefaultIcons(),
+		appModel:       appModel,
+		flashModel:     flashModel,
+		refreshManager: refreshManager,
+		showDetails:    true,
+		focusedPanel:   FocusTable,
+		theme:          styles.Default(),
+		icons:          styles.DefaultIcons(),
 	}
 
 	// Create components
@@ -74,7 +82,6 @@ func NewMainView(appModel *model.AppModel, flashModel *model.FlashModel) *MainVi
 
 	return view
 }
-
 
 // createComponents creates all UI components
 func (v *MainView) createComponents() {
@@ -289,8 +296,8 @@ func (v *MainView) refresh() {
 
 // toggleAutoRefresh toggles auto-refresh
 func (v *MainView) toggleAutoRefresh() {
-	enabled := !v.appModel.IsAutoRefresh()
-	v.appModel.SetAutoRefresh(enabled)
+	enabled := !v.refreshManager.IsEnabled()
+	v.refreshManager.SetEnabled(enabled)
 
 	if enabled {
 		v.flashModel.Info("Auto-refresh enabled")
@@ -325,19 +332,32 @@ func (v *MainView) toggleDetails() {
 func (v *MainView) Focus() {
 }
 
-// Implement model.AppListener interface
+// Implement model.AppListener interface - MainView coordinates all UI updates
 func (v *MainView) OnDataChanged(sequencers []*sequencer.Sequencer) {
+	// Update all components with new data
+	v.table.SetData(sequencers)
+	v.detailsPanel.UpdateData(sequencers)
+
+	// Update MainView-specific UI elements
 	v.updateHeader()
 	v.updateOperationsView()
 }
 
 func (v *MainView) OnSelectionChanged(seq *sequencer.Sequencer) {
+	// Update details panel with selected sequencer
+	v.detailsPanel.SetData(seq)
+
+	// Update operations view
 	v.updateOperationsView()
 }
 
 func (v *MainView) OnError(err error) {
 	if err != nil {
+		// Show error in flash message
 		v.flashModel.Error(err.Error())
+
+		// Also show error in table if it's a data error
+		v.table.ShowError(err.Error())
 	}
 }
 

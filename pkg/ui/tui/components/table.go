@@ -1,9 +1,7 @@
 package components
 
 import (
-	"fmt"
 	"strings"
-	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/golem-base/seqctl/pkg/sequencer"
@@ -61,9 +59,6 @@ func NewSequencerTable(appModel *model.AppModel, theme *styles.Theme) *Sequencer
 	// Show initial loading state
 	table.showLoadingState()
 
-	// Register as model listener
-	appModel.AddListener(table)
-
 	// Handle selection changes
 	table.Table.SetSelectionChangedFunc(func(row, column int) {
 		if row > 0 {
@@ -73,8 +68,6 @@ func NewSequencerTable(appModel *model.AppModel, theme *styles.Theme) *Sequencer
 			}
 		}
 	})
-
-	// Input handling will be managed by the parent view
 
 	return table
 }
@@ -260,23 +253,14 @@ func (t *SequencerTable) NavigateDown() {
 	}
 }
 
-// Implement model.AppListener interface
-func (t *SequencerTable) OnDataChanged(sequencers []*sequencer.Sequencer) {
+// SetData updates the table with new sequencer data (called by MainView)
+func (t *SequencerTable) SetData(sequencers []*sequencer.Sequencer) {
 	t.updateTable(sequencers)
 }
 
-func (t *SequencerTable) OnSelectionChanged(seq *sequencer.Sequencer) {
-	// Selection is handled internally, no need to update
-}
-
-func (t *SequencerTable) OnError(err error) {
-	if err != nil {
-		t.showError(fmt.Sprintf("Error: %s", err.Error()))
-	}
-}
-
-func (t *SequencerTable) OnRefreshCompleted(time.Time) {
-	// No action needed for table
+// ShowError displays an error in the table (called by MainView)
+func (t *SequencerTable) ShowError(message string) {
+	t.showError(message)
 }
 
 // showLoadingState displays a loading message

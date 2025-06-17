@@ -13,12 +13,10 @@ import (
 
 // AppModel represents the application state
 type AppModel struct {
-	network         *network.Network
-	sequencers      []*sequencer.Sequencer
-	selectedIndex   int
-	lastUpdate      time.Time
-	refreshInterval time.Duration
-	autoRefresh     bool
+	network       *network.Network
+	sequencers    []*sequencer.Sequencer
+	selectedIndex int
+	lastUpdate    time.Time
 
 	// Listeners
 	listeners []AppListener
@@ -38,11 +36,9 @@ type AppListener interface {
 // NewAppModel creates a new application model
 func NewAppModel(network *network.Network) *AppModel {
 	return &AppModel{
-		network:         network,
-		selectedIndex:   -1,
-		refreshInterval: 5 * time.Second,
-		autoRefresh:     true,
-		listeners:       make([]AppListener, 0),
+		network:       network,
+		selectedIndex: -1,
+		listeners:     make([]AppListener, 0),
 	}
 }
 
@@ -86,31 +82,31 @@ func (m *AppModel) Refresh(ctx context.Context) error {
 		return err
 	}
 
+	var sequencersCopy []*sequencer.Sequencer
+	var lastUpdate time.Time
+
 	m.mu.Lock()
 	m.sequencers = m.network.Sequencers()
 	m.lastUpdate = time.Now()
 
-	// Validate selected index
-	if m.selectedIndex >= len(m.sequencers) {
-		m.selectedIndex = len(m.sequencers) - 1
-	}
-	if m.selectedIndex < 0 && len(m.sequencers) > 0 {
-		m.selectedIndex = 0
-	}
+	// Validate selected index using helper method
+	m.normalizeSelection()
+
+	// Copy data while still holding lock to prevent race condition
+	sequencersCopy = make([]*sequencer.Sequencer, len(m.sequencers))
+	copy(sequencersCopy, m.sequencers)
+	lastUpdate = m.lastUpdate
 	m.mu.Unlock()
 
-	// Notify listeners of changes
-	sequencers := make([]*sequencer.Sequencer, len(m.sequencers))
-	copy(sequencers, m.sequencers)
-	m.notifyListeners(func(l AppListener) {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			l.OnDataChanged(sequencers)
-			l.OnRefreshCompleted(m.lastUpdate)
-		}
-	})
+	// Check for context cancellation before notifying
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		// Notify listeners with copied data (separate calls for better error handling)
+		m.notifyDataChanged(sequencersCopy)
+		m.notifyRefreshCompleted(lastUpdate)
+	}
 
 	return nil
 }
@@ -127,7 +123,7 @@ func (m *AppModel) GetSelectedSequencer() *sequencer.Sequencer {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if m.selectedIndex < 0 || m.selectedIndex >= len(m.sequencers) {
+	if !m.isValidIndex(m.selectedIndex) {
 		return nil
 	}
 	return m.sequencers[m.selectedIndex]
@@ -138,7 +134,7 @@ func (m *AppModel) SetSelectedIndex(index int) {
 	var seq *sequencer.Sequencer
 
 	m.mu.Lock()
-	if index < 0 || index >= len(m.sequencers) {
+	if !m.isValidIndex(index) {
 		m.mu.Unlock()
 		return
 	}
@@ -176,32 +172,21 @@ func (m *AppModel) GetLastUpdate() time.Time {
 	return m.lastUpdate
 }
 
-// SetAutoRefresh enables or disables auto-refresh
-func (m *AppModel) SetAutoRefresh(enabled bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.autoRefresh = enabled
+// isValidIndex checks if an index is within bounds
+// Must be called while holding m.mu lock
+func (m *AppModel) isValidIndex(index int) bool {
+	return index >= 0 && index < len(m.sequencers)
 }
 
-// IsAutoRefresh returns the auto-refresh state
-func (m *AppModel) IsAutoRefresh() bool {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.autoRefresh
-}
-
-// SetRefreshInterval sets the refresh interval
-func (m *AppModel) SetRefreshInterval(interval time.Duration) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.refreshInterval = interval
-}
-
-// GetRefreshInterval returns the refresh interval
-func (m *AppModel) GetRefreshInterval() time.Duration {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.refreshInterval
+// normalizeSelection ensures selectedIndex is within bounds
+// Must be called while holding m.mu lock
+func (m *AppModel) normalizeSelection() {
+	if m.selectedIndex >= len(m.sequencers) {
+		m.selectedIndex = len(m.sequencers) - 1
+	}
+	if m.selectedIndex < 0 && len(m.sequencers) > 0 {
+		m.selectedIndex = 0
+	}
 }
 
 // notifyListeners is a generic helper to notify all listeners
@@ -214,6 +199,20 @@ func (m *AppModel) notifyListeners(notify func(AppListener)) {
 	for _, listener := range listeners {
 		notify(listener)
 	}
+}
+
+// notifyDataChanged notifies listeners of data changes
+func (m *AppModel) notifyDataChanged(sequencers []*sequencer.Sequencer) {
+	m.notifyListeners(func(l AppListener) {
+		l.OnDataChanged(sequencers)
+	})
+}
+
+// notifyRefreshCompleted notifies listeners that refresh completed
+func (m *AppModel) notifyRefreshCompleted(timestamp time.Time) {
+	m.notifyListeners(func(l AppListener) {
+		l.OnRefreshCompleted(timestamp)
+	})
 }
 
 // notifyError notifies listeners of an error

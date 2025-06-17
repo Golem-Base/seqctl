@@ -47,13 +47,15 @@ func NewTUI(network *network.Network) *TUI {
 	tui.appModel = model.NewAppModel(network)
 	tui.flashModel = model.NewFlashModel()
 
+	// Initialize refresh manager first (needed by MainView)
+	tui.refresh = managers.NewRefreshManager(tui.appModel, tui.flashModel, tui.app)
+
 	// Initialize views
-	tui.mainView = views.NewMainView(tui.appModel, tui.flashModel)
+	tui.mainView = views.NewMainView(tui.appModel, tui.flashModel, tui.refresh)
 	tui.helpView = views.NewHelpView(tui.theme)
 
-	// Initialize managers
+	// Initialize navigation manager
 	tui.navigation = managers.NewNavigationManager(tui.app, tui.mainView, tui.helpView)
-	tui.refresh = managers.NewRefreshManager(tui.appModel, tui.flashModel, tui.app)
 
 	// Initialize confirmation manager and action dispatcher
 	confirmationManager := components.NewConfirmationManager(tui.navigation.GetPages(), tui.flashModel, tui.theme)

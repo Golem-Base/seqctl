@@ -3,6 +3,7 @@ package managers
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/golem-base/seqctl/pkg/ui/tui/model"
@@ -14,10 +15,15 @@ type RefreshManager struct {
 	appModel   *model.AppModel
 	flashModel *model.FlashModel
 	app        *tview.Application
-	enabled    bool
-	interval   time.Duration
-	ticker     *time.Ticker
-	cancel     context.CancelFunc
+	
+	// Protected state
+	mu       sync.RWMutex
+	enabled  bool
+	interval time.Duration
+	
+	// Runtime state
+	ticker *time.Ticker
+	cancel context.CancelFunc
 }
 
 // NewRefreshManager creates a new refresh manager
@@ -35,13 +41,18 @@ func NewRefreshManager(appModel *model.AppModel, flashModel *model.FlashModel, a
 func (r *RefreshManager) Start() {
 	r.Stop()
 
-	if !r.enabled {
+	r.mu.RLock()
+	enabled := r.enabled
+	interval := r.interval
+	r.mu.RUnlock()
+
+	if !enabled {
 		return
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	r.cancel = cancel
-	r.ticker = time.NewTicker(r.interval)
+	r.ticker = time.NewTicker(interval)
 
 	go func() {
 		defer r.ticker.Stop()
@@ -70,8 +81,9 @@ func (r *RefreshManager) Stop() {
 
 // SetEnabled enables or disables auto-refresh
 func (r *RefreshManager) SetEnabled(enabled bool) {
+	r.mu.Lock()
 	r.enabled = enabled
-	r.appModel.SetAutoRefresh(enabled)
+	r.mu.Unlock()
 
 	if enabled {
 		r.Start()
@@ -82,13 +94,32 @@ func (r *RefreshManager) SetEnabled(enabled bool) {
 
 // SetInterval sets the refresh interval
 func (r *RefreshManager) SetInterval(interval time.Duration) {
+	r.mu.Lock()
 	r.interval = interval
-	r.appModel.SetRefreshInterval(interval)
+	r.mu.Unlock()
 
-	if r.enabled {
+	r.mu.RLock()
+	enabled := r.enabled
+	r.mu.RUnlock()
+
+	if enabled {
 		r.Stop()
 		r.Start()
 	}
+}
+
+// IsEnabled returns whether auto-refresh is enabled
+func (r *RefreshManager) IsEnabled() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.enabled
+}
+
+// GetInterval returns the current refresh interval
+func (r *RefreshManager) GetInterval() time.Duration {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.interval
 }
 
 // RefreshNow triggers an immediate refresh

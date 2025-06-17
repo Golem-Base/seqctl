@@ -38,9 +38,6 @@ func NewDetailsPanel(appModel *model.AppModel, theme *styles.Theme) *DetailsPane
 	// Set initial text
 	panel.updateContent(nil)
 
-	// Register as model listener
-	appModel.AddListener(panel)
-
 	return panel
 }
 
@@ -115,8 +112,13 @@ func (d *DetailsPanel) formatBooleanStatus(status bool) string {
 	return "[red]✗ No[-]"
 }
 
-// Implement model.AppListener interface
-func (d *DetailsPanel) OnDataChanged(sequencers []*sequencer.Sequencer) {
+// SetData updates the details panel with selected sequencer (called by MainView)
+func (d *DetailsPanel) SetData(seq *sequencer.Sequencer) {
+	d.updateContent(seq)
+}
+
+// UpdateData refreshes current sequencer data if it still exists (called by MainView)
+func (d *DetailsPanel) UpdateData(sequencers []*sequencer.Sequencer) {
 	// Update current sequencer if it still exists
 	if d.current != nil {
 		for _, seq := range sequencers {
@@ -128,16 +130,4 @@ func (d *DetailsPanel) OnDataChanged(sequencers []*sequencer.Sequencer) {
 		// Current sequencer no longer exists
 		d.updateContent(nil)
 	}
-}
-
-func (d *DetailsPanel) OnSelectionChanged(seq *sequencer.Sequencer) {
-	d.updateContent(seq)
-}
-
-func (d *DetailsPanel) OnError(err error) {
-	// Details panel doesn't handle errors directly
-}
-
-func (d *DetailsPanel) OnRefreshCompleted(time.Time) {
-	// No action needed
 }
