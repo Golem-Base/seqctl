@@ -56,14 +56,14 @@ func (d *ActionDispatcher) Execute(action *actions.Action, seq *sequencer.Sequen
 		return
 	}
 
-	// Check read-only mode
-	if d.readOnlyMode && !action.Opts.ReadOnly {
+	// Check read-only mode (all actions are now considered write operations)
+	if d.readOnlyMode {
 		d.flashModel.Warning("Action not available in read-only mode")
 		return
 	}
 
 	// Handle dangerous actions with confirmation
-	if action.Opts.Dangerous && d.confirmDanger {
+	if action.Dangerous && d.confirmDanger {
 		d.showConfirmation(action, seq)
 		return
 	}
@@ -108,7 +108,7 @@ func (d *ActionDispatcher) perform(action *actions.Action, seq *sequencer.Sequen
 		slog.Debug("Executing action",
 			"action", action.Name,
 			"sequencer", seq.Config.ID,
-			"dangerous", action.Opts.Dangerous)
+			"dangerous", action.Dangerous)
 
 		if err := action.Handler(ctx, seq); err != nil {
 			d.app.QueueUpdateDraw(func() {

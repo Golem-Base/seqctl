@@ -14,17 +14,11 @@ func OverrideLeaderAction() *Action {
 		Key:         'o',
 		Name:        ActionNameOverrideLeader,
 		Description: "Override leader status",
-		Category:    "Leadership",
 		Handler:     overrideLeaderHandler,
 		Enabled: func(seq *sequencer.Sequencer) bool {
 			return seq != nil
 		},
-		Opts: ActionOpts{
-			Visible:   true,
-			Shared:    false,
-			Dangerous: true, // Leadership changes can affect consensus
-			ReadOnly:  false,
-		},
+		Dangerous: true,
 	}
 }
 

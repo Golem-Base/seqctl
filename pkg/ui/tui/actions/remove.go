@@ -14,17 +14,11 @@ func RemoveServerAction() *Action {
 		Key:         'd',
 		Name:        ActionNameRemoveServer,
 		Description: "Remove sequencer from cluster",
-		Category:    "Cluster",
 		Handler:     removeServerHandler,
 		Enabled: func(seq *sequencer.Sequencer) bool {
 			return seq != nil && !seq.Status.ConductorLeader
 		},
-		Opts: ActionOpts{
-			Visible:   true,
-			Shared:    false,
-			Dangerous: true,
-			ReadOnly:  false,
-		},
+		Dangerous: true,
 	}
 }
 

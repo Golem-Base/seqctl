@@ -14,17 +14,11 @@ func UpdateClusterMembershipAction() *Action {
 		Key:         'u',
 		Name:        ActionNameUpdateMembership,
 		Description: "Update cluster membership",
-		Category:    "Cluster",
 		Handler:     updateClusterMembershipHandler,
 		Enabled: func(seq *sequencer.Sequencer) bool {
 			return seq != nil && seq.Status.ConductorLeader
 		},
-		Opts: ActionOpts{
-			Visible:   true,
-			Shared:    false,
-			Dangerous: true,
-			ReadOnly:  false,
-		},
+		Dangerous: true,
 	}
 }
 

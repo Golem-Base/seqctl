@@ -14,17 +14,11 @@ func HaltSequencerAction() *Action {
 		Key:         'h',
 		Name:        ActionNameHaltSequencer,
 		Description: "Halt sequencer",
-		Category:    "Control",
 		Handler:     haltSequencerHandler,
 		Enabled: func(seq *sequencer.Sequencer) bool {
 			return seq != nil && seq.Status.SequencerActive
 		},
-		Opts: ActionOpts{
-			Visible:   true,
-			Shared:    false,
-			Dangerous: true,
-			ReadOnly:  false,
-		},
+		Dangerous: true,
 	}
 }
 

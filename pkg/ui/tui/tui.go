@@ -5,6 +5,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/golem-base/seqctl/pkg/network"
+	"github.com/golem-base/seqctl/pkg/ui/tui/actions"
 	"github.com/golem-base/seqctl/pkg/ui/tui/components"
 	"github.com/golem-base/seqctl/pkg/ui/tui/managers"
 	"github.com/golem-base/seqctl/pkg/ui/tui/model"
@@ -48,7 +49,7 @@ func NewTUI(network *network.Network) *TUI {
 
 	// Initialize views
 	tui.mainView = views.NewMainView(tui.appModel, tui.flashModel)
-	tui.helpView = views.NewHelpView(tui.mainView.GetActionRegistry(), tui.theme)
+	tui.helpView = views.NewHelpView(tui.theme)
 
 	// Initialize managers
 	tui.navigation = managers.NewNavigationManager(tui.app, tui.mainView, tui.helpView)
@@ -98,7 +99,7 @@ func (t *TUI) setupKeyHandling() {
 			default:
 				// Handle action keys if on main view
 				if t.navigation.IsMainView() {
-					if action := t.mainView.GetActionRegistry().GetByKey(event.Rune()); action != nil {
+					if action := actions.GetActionByKey(event.Rune()); action != nil {
 						seq := t.appModel.GetSelectedSequencer()
 						t.actionDispatcher.Execute(action, seq)
 						return nil

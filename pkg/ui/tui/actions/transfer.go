@@ -14,17 +14,11 @@ func TransferLeaderAction() *Action {
 		Key:         't',
 		Name:        ActionNameTransferLeader,
 		Description: "Transfer leadership to this sequencer",
-		Category:    "Leadership",
 		Handler:     transferLeaderHandler,
 		Enabled: func(seq *sequencer.Sequencer) bool {
 			return seq != nil && !seq.Status.ConductorLeader
 		},
-		Opts: ActionOpts{
-			Visible:   true,
-			Shared:    false,
-			Dangerous: true,
-			ReadOnly:  false,
-		},
+		Dangerous: true,
 	}
 }
 

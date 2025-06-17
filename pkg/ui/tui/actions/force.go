@@ -14,17 +14,11 @@ func ForceActiveSequencerAction() *Action {
 		Key:         'f',
 		Name:        ActionNameForceActive,
 		Description: "Force sequencer to become active",
-		Category:    "Control",
 		Handler:     forceActiveSequencerHandler,
 		Enabled: func(seq *sequencer.Sequencer) bool {
 			return seq != nil && !seq.Status.SequencerActive
 		},
-		Opts: ActionOpts{
-			Visible:   true,
-			Shared:    false,
-			Dangerous: true,
-			ReadOnly:  false,
-		},
+		Dangerous: true,
 	}
 }
 

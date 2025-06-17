@@ -14,17 +14,11 @@ func PauseAction() *Action {
 		Key:         'p',
 		Name:        ActionNamePause,
 		Description: "Pause conductor",
-		Category:    "Control",
 		Handler:     pauseHandler,
 		Enabled: func(seq *sequencer.Sequencer) bool {
 			return seq != nil && seq.Status.ConductorActive
 		},
-		Opts: ActionOpts{
-			Visible:   true,
-			Shared:    false,
-			Dangerous: true,
-			ReadOnly:  false,
-		},
+		Dangerous: true,
 	}
 }
 

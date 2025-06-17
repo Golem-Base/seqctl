@@ -38,9 +38,6 @@ type MainView struct {
 	appModel   *model.AppModel
 	flashModel *model.FlashModel
 
-	// Actions
-	actionRegistry *actions.ActionRegistry
-
 	// State
 	showDetails     bool
 	focusedPanel    int
@@ -60,9 +57,6 @@ func NewMainView(appModel *model.AppModel, flashModel *model.FlashModel) *MainVi
 		icons:        styles.DefaultIcons(),
 	}
 
-	// Initialize action registry
-	view.setupActions()
-
 	// Create components
 	view.createComponents()
 
@@ -81,20 +75,6 @@ func NewMainView(appModel *model.AppModel, flashModel *model.FlashModel) *MainVi
 	return view
 }
 
-// setupActions initializes the action registry
-func (v *MainView) setupActions() {
-	v.actionRegistry = actions.NewActionRegistry()
-
-	// Register all actions
-	v.actionRegistry.Register(actions.PauseAction())
-	v.actionRegistry.Register(actions.ResumeAction())
-	v.actionRegistry.Register(actions.OverrideLeaderAction())
-	v.actionRegistry.Register(actions.HaltSequencerAction())
-	v.actionRegistry.Register(actions.TransferLeaderAction())
-	v.actionRegistry.Register(actions.ForceActiveSequencerAction())
-	v.actionRegistry.Register(actions.RemoveServerAction())
-	v.actionRegistry.Register(actions.UpdateClusterMembershipAction())
-}
 
 // createComponents creates all UI components
 func (v *MainView) createComponents() {
@@ -201,11 +181,11 @@ func (v *MainView) updateOperationsView() {
 	selected := v.appModel.GetSelectedSequencer()
 
 	var text string
-	for _, action := range v.actionRegistry.GetVisible() {
+	for _, action := range actions.GetVisibleActions() {
 		enabled := action.Enabled == nil || (selected != nil && action.Enabled(selected))
 
 		color := "aqua"
-		if action.Opts.Dangerous {
+		if action.Dangerous {
 			color = "orange"
 		}
 		if !enabled {
@@ -228,9 +208,9 @@ func (v *MainView) GetContainer() *tview.Flex {
 	return v.container
 }
 
-// GetActionRegistry returns the action registry
-func (v *MainView) GetActionRegistry() *actions.ActionRegistry {
-	return v.actionRegistry
+// GetActionRegistry returns all actions (updated for simplified actions)
+func (v *MainView) GetActionRegistry() []*actions.Action {
+	return actions.AllActions
 }
 
 // GetTable returns the table component for focus management

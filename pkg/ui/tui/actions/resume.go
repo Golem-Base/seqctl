@@ -14,17 +14,11 @@ func ResumeAction() *Action {
 		Key:         's',
 		Name:        ActionNameResume,
 		Description: "Resume conductor",
-		Category:    "Control",
 		Handler:     resumeHandler,
 		Enabled: func(seq *sequencer.Sequencer) bool {
 			return seq != nil && !seq.Status.ConductorActive
 		},
-		Opts: ActionOpts{
-			Visible:   true,
-			Shared:    false,
-			Dangerous: false,
-			ReadOnly:  false,
-		},
+		Dangerous: false,
 	}
 }
 
