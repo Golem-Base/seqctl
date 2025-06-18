@@ -78,7 +78,6 @@ func Default() *Theme {
 
 // CatppuccinMocha returns the Catppuccin Mocha theme
 // A soothing pastel theme with warm colors on a dark background
-// To use this theme, replace styles.Default() with styles.CatppuccinMocha() in tui.go:42
 func CatppuccinMocha() *Theme {
 	return &Theme{
 		// Background color - Catppuccin Base

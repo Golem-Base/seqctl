@@ -70,7 +70,7 @@ const (
 )
 
 // NewMainView creates the main sequencer view
-func NewMainView(appModel *model.AppModel, flashModel *model.FlashModel, refreshManager RefreshManager) *MainView {
+func NewMainView(appModel *model.AppModel, flashModel *model.FlashModel, refreshManager RefreshManager, theme *styles.Theme, icons *styles.Icons) *MainView {
 	view := &MainView{
 		appModel:       appModel,
 		flashModel:     flashModel,
@@ -78,8 +78,8 @@ func NewMainView(appModel *model.AppModel, flashModel *model.FlashModel, refresh
 		showDetails:    true,
 		focusedPanel:   FocusTable,
 		currentState:   StateLoading,
-		theme:          styles.Default(),
-		icons:          styles.DefaultIcons(),
+		theme:          theme,
+		icons:          icons,
 	}
 
 	// Create components

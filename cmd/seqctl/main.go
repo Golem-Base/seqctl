@@ -74,7 +74,7 @@ func main() {
 		}
 
 		// Create and configure TUI
-		tui := tui.NewTUI(network)
+		tui := tui.NewTUI(network, &cfg.UI)
 
 		// Apply TUI configuration from flags
 		if c.IsSet("refresh-interval") {

@@ -2,19 +2,9 @@ package config
 
 import (
 	"fmt"
-	"log/slog"
-	"strings"
-
-	"github.com/knadh/koanf/parsers/toml"
-	"github.com/knadh/koanf/providers/env"
-	"github.com/knadh/koanf/providers/file"
-	"github.com/knadh/koanf/providers/posflag"
-	"github.com/knadh/koanf/providers/structs"
-	"github.com/knadh/koanf/v2"
-	"github.com/spf13/pflag"
-	"github.com/urfave/cli/v2"
 
 	"github.com/golem-base/seqctl/pkg/flags"
+	"github.com/golem-base/seqctl/pkg/ui/tui/styles"
 )
 
 const (
@@ -24,14 +14,36 @@ const (
 	EnvPrefix    = flags.EnvVarPrefix + EnvSeparator
 )
 
+// ThemeName represents available themes
+type ThemeName string
+
+const (
+	ThemeDefault         ThemeName = "default"
+	ThemeCatppuccinMocha ThemeName = "catppuccin-mocha"
+)
+
+// IconStyle represents available icon styles
+type IconStyle string
+
+const (
+	IconStyleDefault IconStyle = "default"
+)
+
+// UIConfig holds TUI configuration options
+type UIConfig struct {
+	Theme     ThemeName `koanf:"theme" json:"theme" yaml:"theme" toml:"theme"`
+	IconStyle IconStyle `koanf:"icon_style" json:"icon_style" yaml:"icon_style" toml:"icon_style"`
+}
+
 // Config holds the application configuration
 type Config struct {
-	K8sConfig   string `koanf:"k8s_config"`
-	K8sSelector string `koanf:"k8s_selector"`
-	LogLevel    string `koanf:"log_level"`
-	LogFormat   string `koanf:"log_format"`
-	LogNoColor  bool   `koanf:"log_no_color"`
-	LogFile     string `koanf:"log_file"`
+	K8sConfig   string   `koanf:"k8s_config"`
+	K8sSelector string   `koanf:"k8s_selector"`
+	LogLevel    string   `koanf:"log_level"`
+	LogFormat   string   `koanf:"log_format"`
+	LogNoColor  bool     `koanf:"log_no_color"`
+	LogFile     string   `koanf:"log_file"`
+	UI          UIConfig `koanf:"ui"`
 }
 
 // New creates a new Config instance with default values
@@ -41,106 +53,44 @@ func New() *Config {
 		LogLevel:    flags.LogLevel.Value,
 		LogFormat:   flags.LogFormat.Value,
 		LogNoColor:  flags.LogNoColor.Value,
+		UI: UIConfig{
+			Theme:     ThemeDefault,
+			IconStyle: IconStyleDefault,
+		},
 	}
 }
 
-// LoadConfig loads configuration from various sources
-func LoadConfig(cliCtx *cli.Context) (*Config, error) {
-	// Create a new instance with defaults
-	cfg := New()
+// GetTheme returns the theme instance based on the configured theme name
+func (ui *UIConfig) GetTheme() (*styles.Theme, error) {
+	switch ui.Theme {
+	case ThemeDefault:
+		return styles.Default(), nil
+	case ThemeCatppuccinMocha:
+		return styles.CatppuccinMocha(), nil
+	default:
+		return nil, fmt.Errorf("unknown theme: %s", ui.Theme)
+	}
+}
 
-	// Initialize koanf
-	k := koanf.New(Delimiter)
+// GetIcons returns the icon set based on the configured icon style
+func (ui *UIConfig) GetIcons() (*styles.Icons, error) {
+	switch ui.IconStyle {
+	case IconStyleDefault:
+		return styles.DefaultIcons(), nil
+	default:
+		return nil, fmt.Errorf("unknown icon style: %s", ui.IconStyle)
+	}
+}
 
-	// Load defaults from struct
-	if err := k.Load(structs.Provider(cfg, KoanfTag), nil); err != nil {
-		slog.Error("Failed to load defaults", "error", err)
-		return nil, fmt.Errorf("failed to load default configuration values: %w", err)
+// Validate checks if the UI configuration values are valid
+func (ui *UIConfig) Validate() error {
+	if _, err := ui.GetTheme(); err != nil {
+		return fmt.Errorf("invalid theme: %w", err)
 	}
 
-	// Define environment variable transformer
-	envTransform := func(s string) string {
-		return strings.ReplaceAll(
-			strings.ToLower(
-				strings.TrimPrefix(s, EnvPrefix),
-			),
-			EnvSeparator,
-			Delimiter,
-		)
+	if _, err := ui.GetIcons(); err != nil {
+		return fmt.Errorf("invalid icon style: %w", err)
 	}
 
-	// Load from environment variables
-	slog.Debug("Loading config from environment variables")
-	if err := k.Load(env.Provider(EnvPrefix, Delimiter, envTransform), nil); err != nil {
-		slog.Error("Failed to load environment variables", "error", err)
-		return nil, fmt.Errorf("failed to load configuration from environment variables with prefix %s: %w", EnvPrefix, err)
-	}
-
-	// Load from config file if provided
-	configPath := cliCtx.String(flags.Config.Name)
-	if configPath != "" {
-		slog.Debug("Loading config from file", "path", configPath)
-		if err := k.Load(file.Provider(configPath), toml.Parser()); err != nil {
-			if !strings.Contains(err.Error(), "no such file") {
-				slog.Error("Failed to load config file", "path", configPath, "error", err)
-				return nil, fmt.Errorf("failed to load configuration from file %s: %w", configPath, err)
-			}
-			slog.Debug("Config file not found, skipping", "path", configPath)
-		}
-	}
-
-	// Create flag set for command line args
-	fs := pflag.NewFlagSet("config", pflag.ContinueOnError)
-
-	// Add flags from CLI context
-	flagsAdded := false
-
-	// Map of flag names to their koanf keys
-	flagMap := map[string]string{
-		flags.K8sConfig.Name:   "k8s_config",
-		flags.K8sSelector.Name: "k8s_selector",
-		flags.LogLevel.Name:    "log_level",
-		flags.LogFormat.Name:   "log_format",
-		flags.LogNoColor.Name:  "log_no_color",
-		flags.LogFile.Name:     "log_file",
-	}
-
-	// Process each flag
-	for flagName, koanfKey := range flagMap {
-		if cliCtx.IsSet(flagName) {
-			flagsAdded = true
-			if flagName == flags.LogNoColor.Name {
-				fs.Bool(koanfKey, cliCtx.Bool(flagName), "")
-				fs.Set(koanfKey, strings.ToLower(strings.TrimSpace(cliCtx.String(flagName))))
-				slog.Debug("Added CLI flag", "name", flagName, "koanf_key", koanfKey, "value", cliCtx.Bool(flagName))
-			} else {
-				fs.String(koanfKey, cliCtx.String(flagName), "")
-				fs.Set(koanfKey, cliCtx.String(flagName))
-				slog.Debug("Added CLI flag", "name", flagName, "koanf_key", koanfKey, "value", cliCtx.String(flagName))
-			}
-		}
-	}
-
-	// Only load flags if any were set
-	if flagsAdded {
-		slog.Debug("Loading config from CLI flags")
-		if err := k.Load(posflag.Provider(fs, Delimiter, k), nil); err != nil {
-			slog.Error("Failed to load CLI flags", "error", err)
-			return nil, fmt.Errorf("failed to load configuration from CLI flags: %w", err)
-		}
-	}
-
-	// Unmarshal into the config struct
-	if err := k.Unmarshal("", cfg); err != nil {
-		slog.Error("Failed to unmarshal config", "error", err)
-		return nil, fmt.Errorf("failed to unmarshal configuration into struct: %w", err)
-	}
-
-	// Log the final configuration
-	slog.Debug("Configuration loaded",
-		"k8s_config", cfg.K8sConfig,
-		"k8s_selector", cfg.K8sSelector,
-		"log_level", cfg.LogLevel)
-
-	return cfg, nil
+	return nil
 }

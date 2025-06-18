@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/golem-base/seqctl/pkg/config"
 	"github.com/golem-base/seqctl/pkg/network"
 	"github.com/golem-base/seqctl/pkg/ui/tui/actions"
 	"github.com/golem-base/seqctl/pkg/ui/tui/managers"
@@ -31,15 +32,38 @@ type TUI struct {
 	refresh          *managers.RefreshManager
 	actionDispatcher *managers.ActionDispatcher
 
-	// Theme
-	theme *styles.Theme
+	// Configuration
+	uiConfig *config.UIConfig
+	theme    *styles.Theme
+	icons    *styles.Icons
 }
 
 // NewTUI creates a new TUI with clean architecture
-func NewTUI(network *network.Network) *TUI {
+func NewTUI(network *network.Network, uiConfig *config.UIConfig) *TUI {
+	// Use default UI config if none provided
+	if uiConfig == nil {
+		cfg := config.New()
+		uiConfig = &cfg.UI
+	}
+
+	// Get theme and icons from config
+	theme, err := uiConfig.GetTheme()
+	if err != nil {
+		// Fallback to default theme if config is invalid
+		theme = styles.Default()
+	}
+
+	icons, err := uiConfig.GetIcons()
+	if err != nil {
+		// Fallback to default icons if config is invalid
+		icons = styles.DefaultIcons()
+	}
+
 	tui := &TUI{
-		app:   tview.NewApplication(),
-		theme: styles.Default(),
+		app:      tview.NewApplication(),
+		uiConfig: uiConfig,
+		theme:    theme,
+		icons:    icons,
 	}
 
 	// Initialize models
@@ -50,7 +74,7 @@ func NewTUI(network *network.Network) *TUI {
 	tui.refresh = managers.NewRefreshManager(tui.appModel, tui.flashModel, tui.app)
 
 	// Initialize views
-	tui.mainView = views.NewMainView(tui.appModel, tui.flashModel, tui.refresh)
+	tui.mainView = views.NewMainView(tui.appModel, tui.flashModel, tui.refresh, tui.theme, tui.icons)
 	tui.helpView = views.NewHelpView(tui.theme)
 
 	// Initialize navigation manager
@@ -62,11 +86,6 @@ func NewTUI(network *network.Network) *TUI {
 
 	// Setup key handling
 	tui.setupKeyHandling()
-
-	// Set theme colors
-	tview.Styles.PrimitiveBackgroundColor = tcell.ColorBlack
-	tview.Styles.ContrastBackgroundColor = tcell.ColorBlack
-	tview.Styles.MoreContrastBackgroundColor = tcell.ColorBlack
 
 	return tui
 }
@@ -82,11 +101,7 @@ func (t *TUI) setupKeyHandling() {
 		if event.Key() == tcell.KeyRune {
 			switch event.Rune() {
 			case 'q', 'Q':
-				if t.navigation.IsMainView() {
-					t.Stop()
-				} else {
-					t.navigation.ShowMainView()
-				}
+				t.Stop()
 				return nil
 			case '?':
 				t.navigation.ToggleHelp()
@@ -157,4 +172,9 @@ func (t *TUI) SetReadOnlyMode(readOnly bool) {
 // SetConfirmDanger sets whether dangerous actions require confirmation
 func (t *TUI) SetConfirmDanger(confirm bool) {
 	t.actionDispatcher.SetConfirmDanger(confirm)
+}
+
+// GetUIConfig returns the current UI configuration
+func (t *TUI) GetUIConfig() *config.UIConfig {
+	return t.uiConfig
 }
