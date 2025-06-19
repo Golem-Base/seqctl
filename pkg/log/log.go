@@ -1,7 +1,6 @@
 package log
 
 import (
-	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -9,15 +8,13 @@ import (
 	"github.com/MatusOllah/slogcolor"
 )
 
-// InitForTUI initializes logging for TUI mode with file output
-func InitForTUI(levelStr string, format string, noColor bool, logFile string) error {
-	var output io.Writer
+// Init initializes the global logger with the specified level and output format
+func Init(levelStr string, format string, noColor bool, logFile string) error {
+	var output *os.File
 
 	if logFile == "" {
-		// For TUI mode, if no log file specified, disable most logging
-		// by setting a very high level and using discard
-		output = io.Discard
-		levelStr = "error" // Only errors will be logged to discard
+		// If no log file specified, output to stderr
+		output = os.Stderr
 	} else {
 		// Open log file for writing
 		file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
@@ -27,12 +24,6 @@ func InitForTUI(levelStr string, format string, noColor bool, logFile string) er
 		output = file
 	}
 
-	Init(levelStr, format, noColor, output)
-	return nil
-}
-
-// Init initializes the global logger with the specified level and output format
-func Init(levelStr string, format string, noColor bool, output io.Writer) {
 	// Set log level
 	var level slog.Level
 	switch strings.ToLower(levelStr) {
@@ -67,4 +58,5 @@ func Init(levelStr string, format string, noColor bool, output io.Writer) {
 
 	// Set the default logger
 	slog.SetDefault(slog.New(handler))
+	return nil
 }

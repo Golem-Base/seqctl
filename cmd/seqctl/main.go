@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
 
-	"github.com/ethereum-optimism/optimism/op-service/ctxinterrupt"
 	cli "github.com/urfave/cli/v2"
 
 	gbapp "github.com/golem-base/seqctl/pkg/app"
@@ -14,83 +15,97 @@ import (
 	"github.com/golem-base/seqctl/pkg/flags"
 	"github.com/golem-base/seqctl/pkg/log"
 	"github.com/golem-base/seqctl/pkg/provider"
-	"github.com/golem-base/seqctl/pkg/provider/k8s"
-	tui "github.com/golem-base/seqctl/pkg/ui/tui"
+	"github.com/golem-base/seqctl/pkg/repository"
+	"github.com/golem-base/seqctl/pkg/ui/web"
 	"github.com/golem-base/seqctl/pkg/version"
+
+	_ "github.com/golem-base/seqctl/pkg/swagger"
 )
 
+func runWeb(c *cli.Context) error {
+	// Load configuration
+	cfg, err := config.LoadConfig(c)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Initialize logging for web mode
+	if err := log.Init(
+		cfg.Log.Level,
+		cfg.Log.Format,
+		cfg.Log.NoColor,
+		cfg.Log.FilePath,
+	); err != nil {
+		return fmt.Errorf("failed to initialize logging: %w", err)
+	}
+
+	slog.Info("Starting web server", "address", c.String("address"), "port", c.Int("port"))
+
+	// Debug: Check if context works
+	go func() {
+		<-c.Context.Done()
+		slog.Info("Context cancelled in runWeb")
+	}()
+
+	// Create provider using factory
+	appProvider, err := provider.NewProvider(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to create provider: %w", err)
+	}
+
+	// Create repository with caching
+	repo := repository.NewCachedNetworkRepository(appProvider, 0, 0)
+
+	// Initialize app with repository
+	app := gbapp.New(cfg, repo)
+
+	// Create web server
+	serverConfig := web.DefaultServerConfig()
+	serverConfig.Address = c.String("address")
+	serverConfig.Port = c.Int("port")
+	serverConfig.RefreshInterval = c.Int("refresh-interval")
+	server := web.NewServer(serverConfig, app)
+
+	// Run web server
+	return server.Start(c.Context)
+}
+
 func main() {
-	ctx, stopWaiting := ctxinterrupt.WithSignalWaiter(context.Background())
-	defer stopWaiting()
+	// Initialize basic logging to stderr for startup
+	if err := log.Init("info", "text", false, ""); err != nil {
+		panic(fmt.Errorf("failed to initialize logging: %w", err))
+	}
+
+	// Set up signal handling
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create signal channel
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	// Handle signals
+	go func() {
+		sig := <-sigChan
+		slog.Debug("Received signal", "signal", sig)
+		cancel()
+	}()
 
 	cliapp := cli.NewApp()
 	cliapp.Name = "seqctl"
-	cliapp.Usage = "Terminal UI for managing op-conductor sequencer clusters"
+	cliapp.Usage = "Control panel for managing op-conductor sequencer clusters"
 	cliapp.Version = version.VersionInfo()
-	cliapp.Flags = flags.Flags
-	cliapp.ArgsUsage = "<network-name>"
-
-	cliapp.Action = func(c *cli.Context) error {
-		// Require network name as argument
-		if c.NArg() < 1 {
-			return fmt.Errorf("network name is required")
-		}
-		networkName := c.Args().Get(0)
-
-		// Load configuration
-		cfg, err := config.LoadConfig(c)
-		if err != nil {
-			return fmt.Errorf("failed to load config: %w", err)
-		}
-
-		// Initialize logging for TUI mode (redirect to file or disable)
-		if err := log.InitForTUI(
-			cfg.LogLevel,
-			cfg.LogFormat,
-			cfg.LogNoColor,
-			cfg.LogFile,
-		); err != nil {
-			return fmt.Errorf("failed to initialize logging: %w", err)
-		}
-
-		slog.Debug("Loading configuration from Kubernetes", "selector", cfg.K8sSelector)
-
-		// Initialize K8s client
-		k8sClient, err := k8s.NewClient(cfg.K8sConfig)
-		if err != nil {
-			return fmt.Errorf("failed to create K8s client: %w", err)
-		}
-
-		// Create provider (use networkName as namespace, empty string means all namespaces)
-		k8sProvider := provider.NewK8sProvider(k8sClient, networkName, cfg.K8sSelector)
-
-		// Initialize app with provider
-		app := gbapp.New(cfg, k8sProvider)
-
-		// Get network
-		network, err := app.GetNetwork(ctx, networkName)
-		if err != nil {
-			return fmt.Errorf("failed to get network %s: %w", networkName, err)
-		}
-
-		// Create and configure TUI
-		tui := tui.NewTUI(network, &cfg.UI)
-
-		// Apply TUI configuration from flags
-		if c.IsSet("refresh-interval") {
-			tui.SetRefreshInterval(c.Duration("refresh-interval"))
-		}
-
-		if c.IsSet("auto-refresh") {
-			tui.SetAutoRefresh(c.Bool("auto-refresh"))
-		}
-
-		// Run TUI
-		return tui.Run()
+	cliapp.Commands = []*cli.Command{
+		{
+			Name:   "web",
+			Usage:  "Launch Web Interface",
+			Flags:  append(flags.CommonFlags, flags.WebFlags...),
+			Action: runWeb,
+		},
 	}
 
-	// Run the application
-	if err := cliapp.Run(os.Args); err != nil {
+	// Run the application with the context
+	if err := cliapp.RunContext(ctx, os.Args); err != nil {
 		slog.Error("Application error", "error", err)
 		os.Exit(1)
 	}

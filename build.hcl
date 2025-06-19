@@ -1,5 +1,5 @@
 variable "REGISTRY" {
-  default = "quay.io"
+  default = "docker.io"
 }
 
 variable "REPOSITORY" {

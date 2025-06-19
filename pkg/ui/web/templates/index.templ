@@ -1,0 +1,188 @@
+package templates
+
+import (
+	"fmt"
+	"github.com/golem-base/seqctl/pkg/network"
+)
+
+templ Index(networks map[string]*network.Network, refreshInterval int) {
+	@Base("Networks", refreshInterval) {
+		<script>
+			document.addEventListener('alpine:init', () => {
+				Alpine.data('networksTable', () => ({
+					autoRefreshEnabled: true,
+					refreshInterval: null,
+					
+					init() {
+						// Listen for toggle-refresh events
+						window.addEventListener('toggle-refresh', (event) => {
+							this.autoRefreshEnabled = event.detail.enabled;
+							if (this.autoRefreshEnabled) {
+								this.startAutoRefresh();
+							} else {
+								this.stopAutoRefresh();
+							}
+						});
+						
+						// Start auto-refresh if enabled
+						if (this.autoRefreshEnabled) {
+							this.startAutoRefresh();
+						}
+					},
+					
+					startAutoRefresh() {
+						// Clear any existing interval
+						if (this.refreshInterval) {
+							clearInterval(this.refreshInterval);
+						}
+						
+						// Set up new interval using configured value
+						const intervalMs = (window.SEQCTL_CONFIG?.refreshInterval || 5) * 1000;
+						this.refreshInterval = setInterval(() => {
+							const tbody = document.querySelector('tbody[hx-get]');
+							if (tbody && this.autoRefreshEnabled) {
+								htmx.trigger(tbody, 'refresh');
+							}
+						}, intervalMs);
+					},
+					
+					stopAutoRefresh() {
+						if (this.refreshInterval) {
+							clearInterval(this.refreshInterval);
+							this.refreshInterval = null;
+						}
+					},
+					
+					processNetworksResponse(event) {
+						const networks = JSON.parse(event.detail.xhr.responseText);
+						const tbody = event.detail.target;
+						tbody.innerHTML = '';
+						
+						networks.forEach(network => {
+							const leader = network.sequencers.find(s => s.conductor_leader);
+							const active = network.sequencers.find(s => s.sequencer_active);
+							
+							const row = document.createElement('tr');
+							row.innerHTML = `
+								<td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 dark:text-gray-100 sm:pl-6">${network.name}</td>
+								<td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+									${network.healthy ? 
+										'<span class="inline-flex items-center rounded-md bg-green-50 dark:bg-green-900/20 px-2 py-1 text-xs font-medium text-green-700 dark:text-green-400 ring-1 ring-inset ring-green-600/20 dark:ring-green-500/20">Healthy</span>' : 
+										'<span class="inline-flex items-center rounded-md bg-red-50 dark:bg-red-900/20 px-2 py-1 text-xs font-medium text-red-700 dark:text-red-400 ring-1 ring-inset ring-red-600/10 dark:ring-red-500/20">Unhealthy</span>'
+									}
+								</td>
+								<td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">${network.sequencers.length}</td>
+								<td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+									${leader ? leader.id : '<span class="text-gray-400 dark:text-gray-600">None</span>'}
+								</td>
+								<td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+									${active ? active.id : '<span class="text-gray-400 dark:text-gray-600">None</span>'}
+								</td>
+								<td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+									<a href="/networks/${network.name}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300">
+										View<span class="sr-only">, ${network.name}</span>
+									</a>
+								</td>
+							`;
+							tbody.appendChild(row);
+						});
+					}
+				}))
+			});
+		</script>
+		<div class="px-4 sm:px-6 lg:px-8">
+			<div class="sm:flex sm:items-center">
+				<div class="sm:flex-auto">
+					<h1 class="text-2xl font-semibold leading-6 text-gray-900 dark:text-gray-100">Networks</h1>
+					<p class="mt-2 text-sm text-gray-700 dark:text-gray-300">
+						A list of all sequencer networks in your environment
+					</p>
+				</div>
+			</div>
+			<div class="mt-8 flow-root" x-data="networksTable" @htmx:after-request="processNetworksResponse($event)">
+				<div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+					<div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+						<div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 dark:ring-gray-700 sm:rounded-lg">
+							<table class="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+								<thead class="bg-gray-50 dark:bg-gray-800">
+									<tr>
+										<th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 sm:pl-6">
+											Network Name
+										</th>
+										<th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
+											Status
+										</th>
+										<th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
+											Sequencers
+										</th>
+										<th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
+											Leader
+										</th>
+										<th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
+											Active Sequencer
+										</th>
+										<th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6">
+											<span class="sr-only">View</span>
+										</th>
+									</tr>
+								</thead>
+								<tbody
+									class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900"
+									hx-get="/api/v1/networks"
+									hx-trigger="load, refresh"
+									hx-swap="none"
+									hx-target="this"
+								>
+									@NetworkRows(networks)
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	}
+}
+
+templ NetworkRows(networks map[string]*network.Network) {
+	for _, net := range networks {
+		<tr>
+			<td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 dark:text-gray-100 sm:pl-6">
+				{ net.Name() }
+			</td>
+			<td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+				if net.IsHealthy() {
+					<span class="inline-flex items-center rounded-md bg-green-50 dark:bg-green-900/20 px-2 py-1 text-xs font-medium text-green-700 dark:text-green-400 ring-1 ring-inset ring-green-600/20 dark:ring-green-500/20">
+						Healthy
+					</span>
+				} else {
+					<span class="inline-flex items-center rounded-md bg-red-50 dark:bg-red-900/20 px-2 py-1 text-xs font-medium text-red-700 dark:text-red-400 ring-1 ring-inset ring-red-600/10 dark:ring-red-500/20">
+						Unhealthy
+					</span>
+				}
+			</td>
+			<td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+				{ fmt.Sprintf("%d", len(net.Sequencers())) }
+			</td>
+			<td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+				if leader := net.ConductorLeader(); leader != nil {
+					{ leader.ID() }
+				} else {
+					<span class="text-gray-400 dark:text-gray-600">None</span>
+				}
+			</td>
+			<td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+				if active := net.ActiveSequencer(); active != nil {
+					{ active.ID() }
+				} else {
+					<span class="text-gray-400 dark:text-gray-600">None</span>
+				}
+			</td>
+			<td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+				<a href={ templ.SafeURL(fmt.Sprintf("/networks/%s", net.Name())) } class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300">
+					View<span class="sr-only">, { net.Name() }</span>
+				</a>
+			</td>
+		</tr>
+	}
+}

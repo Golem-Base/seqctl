@@ -7,50 +7,67 @@
 let
   treefmt-settings = {
     package = pkgs.treefmt;
-
     projectRootFile = "flake.nix";
+    programs = {
+      # nix
+      deadnix.enable = true;
+      nixfmt.enable = true;
 
-    programs.deadnix.enable = true;
-    programs.nixfmt.enable = true;
+      # shell
+      shellcheck.enable = true;
+      shfmt.enable = true;
 
-    programs.shellcheck.enable = true;
-    programs.shfmt.enable = true;
+      # yaml
+      yamlfmt.enable = true;
+      yamlfmt.settings.formatter = {
+        type = "basic";
+        indent = 2;
+        retain_line_breaks = true;
+      };
 
-    programs.yamlfmt.enable = true;
-    programs.yamlfmt.settings.formatter = {
-      type = "basic";
-      indent = 2;
-      retain_line_breaks = true;
+      # go
+      gofumpt.enable = true;
+
+      # json
+      jsonfmt.enable = true;
+
+      # hcl
+      hclfmt.enable = true;
+
+      # just
+      just.enable = true;
     };
+    settings = {
+      # nix
+      formatter.deadnix.pipeline = "nix";
+      formatter.deadnix.priority = 1;
+      formatter.nixfmt.pipeline = "nix";
+      formatter.nixfmt.priority = 2;
 
-    programs.gofumpt.enable = true;
+      # shell
+      formatter.shellcheck.pipeline = "shell";
+      formatter.shellcheck.includes = [
+        "*.sh"
+        "*.bash"
+        "*.envrc"
+        "*.envrc.*"
+        "bin/*"
+      ];
+      formatter.shellcheck.priority = 1;
+      formatter.shfmt.pipeline = "shell";
+      formatter.shfmt.includes = [
+        "*.sh"
+        "*.bash"
+        "*.envrc"
+        "*.envrc.*"
+        "bin/*"
+      ];
+      formatter.shfmt.priority = 2;
 
-    settings.formatter.deadnix.pipeline = "nix";
-    settings.formatter.deadnix.priority = 1;
-    settings.formatter.nixfmt.pipeline = "nix";
-    settings.formatter.nixfmt.priority = 2;
-
-    settings.formatter.shellcheck.pipeline = "shell";
-    settings.formatter.shellcheck.includes = [
-      "*.sh"
-      "*.bash"
-      "*.envrc"
-      "*.envrc.*"
-      "bin/*"
-    ];
-    settings.formatter.shellcheck.priority = 1;
-    settings.formatter.shfmt.pipeline = "shell";
-    settings.formatter.shfmt.includes = [
-      "*.sh"
-      "*.bash"
-      "*.envrc"
-      "*.envrc.*"
-      "bin/*"
-    ];
-    settings.formatter.shfmt.priority = 2;
-
-    settings.formatter.yamlfmt.pipeline = "yaml";
-    settings.formatter.yamlfmt.priority = 1;
+      # yaml
+      formatter.yamlfmt.pipeline = "yaml";
+      formatter.yamlfmt.priority = 1;
+    };
   };
 
   formatter = inputs.treefmt-nix.lib.mkWrapper pkgs treefmt-settings;

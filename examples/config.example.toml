@@ -1,0 +1,30 @@
+# Example configuration file for seqctl
+
+# Kubernetes configuration
+[k8s]
+config_path = "/path/to/kubeconfig"  # Path to kubeconfig file (optional, uses default locations)
+selector = "golem-base.io/optimism-role in (sequencer,sequencer-bootstrap)"
+
+# Connection mode configuration
+# Options: "proxy", "direct", "pod-scan", "auto"
+# - proxy: Use Kubernetes API proxy (works from anywhere with kubectl access)
+# - direct: Use direct service/pod connections (requires network access to cluster)
+# - pod-scan: Scan pods directly across namespaces
+# - auto: Automatically detect best mode (default)
+connection_mode = "auto"
+
+# Namespaces to scan (only used with pod-scan mode)
+# Empty or omitted means all namespaces
+namespaces = ["production", "staging"]
+
+# Logging configuration
+[log]
+level = "info"      # debug, info, warn, error
+format = "text"     # text, json
+no_color = false    # Disable colored output
+file_path = ""      # Path to log file (empty = stderr)
+
+# UI configuration (for TUI mode)
+[ui]
+theme = "default"       # default, catppuccin-mocha
+icon_style = "default"  # default

@@ -1,0 +1,58 @@
+package templates
+
+templ toastContainer() {
+	<div id="toast-container" class="fixed bottom-0 right-0 p-6 space-y-4 z-50">
+		// Toast messages will be inserted here dynamically
+	</div>
+	<script>
+		// Toast notification system
+		function showToast(message, type = 'info') {
+			const toast = document.createElement('div');
+			toast.className = `rounded-lg px-6 py-4 shadow-lg transform transition-all duration-300 translate-y-full opacity-0`;
+
+			// Set color based on type
+			switch(type) {
+				case 'success':
+					toast.classList.add('bg-green-500', 'text-white');
+					break;
+				case 'error':
+					toast.classList.add('bg-red-500', 'text-white');
+					break;
+				case 'warning':
+					toast.classList.add('bg-yellow-500', 'text-white');
+					break;
+				default:
+					toast.classList.add('bg-blue-500', 'text-white');
+			}
+
+			toast.textContent = message;
+
+			const container = document.getElementById('toast-container');
+			container.appendChild(toast);
+
+			// Animate in
+			setTimeout(() => {
+				toast.classList.remove('translate-y-full', 'opacity-0');
+			}, 10);
+
+			// Remove after 3 seconds
+			setTimeout(() => {
+				toast.classList.add('translate-y-full', 'opacity-0');
+				setTimeout(() => toast.remove(), 300);
+			}, 3000);
+		}
+
+		// Listen for HTMX events
+		document.body.addEventListener('htmx:afterRequest', function(evt) {
+			if (evt.detail.successful) {
+				// Check for custom success message in response headers
+				const message = evt.detail.xhr.getResponseHeader('X-Toast-Message');
+				if (message) {
+					showToast(message, 'success');
+				}
+			} else {
+				showToast('Operation failed', 'error');
+			}
+		});
+	</script>
+}

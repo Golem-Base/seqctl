@@ -1,160 +1,120 @@
 # seqctl
 
-A CLI tool for managing Optimism conductor sequencer clusters in Kubernetes environments.
-
-> [!IMPORTANT]
-> `seqctl` is alpha software and may cause service disruption on your sequencer cluster if used improperly!
+Web-based control panel for managing Optimism conductor sequencer clusters in Kubernetes environments.
 
 ## Features
 
-- **Interactive TUI**: Real-time monitoring and control of sequencer networks
-- **Network Discovery**: Automatic discovery of sequencer networks from Kubernetes
-- **Sequencer Management**: Pause, resume, transfer leadership, and control sequencer operations
-- **Cluster Operations**: Manage Raft cluster membership and voting rights
-- **Health Monitoring**: Track conductor and sequencer health status
+- **Real-time Monitoring** - View sequencer health, status, and leadership in real-time
+- **Cluster Operations** - Pause/resume conductors, transfer leadership, manage Raft membership
+- **Multi-Provider Support** - Kubernetes today, extensible to Docker and AWS
+- **RESTful API** - Complete API for automation and integration
+- **WebSocket Updates** - Real-time dashboard updates without polling
+- **Clean Architecture** - Layered design for maintainability and testing
 
-## Installation
+## Screenshots
 
-### Prerequisites
+<p align="center">
+  <img src="docs/assets/dashboard.png" alt="Dashboard" width="600">
+</p>
 
-- Go 1.22 or higher
-- Access to a Kubernetes cluster with Optimism sequencers deployed
-- `kubectl` configured with appropriate permissions
+## Quick Start
 
-### Building from Source
+### Using Pre-built Binary
+
+```bash
+# Download the latest release
+curl -L https://github.com/golem-base/seqctl/releases/latest/download/seqctl_linux_amd64.tar.gz | tar xz
+
+# Run the web server
+./seqctl web --k8s-selector "app=op-conductor"
+```
+
+### Using Docker
+
+```bash
+docker run -p 8080:8080 \
+  -v ~/.kube/config:/app/.kube/config:ro \
+  golemnetwork/seqctl:latest \
+  web --k8s-config /app/.kube/config
+```
+
+### From Source
 
 ```bash
 # Clone the repository
-git clone https://github.com/golem-base/seqctl.git
+git clone https://github.com/golem-base/seqctl
 cd seqctl
 
-# Build the binary
+# Build with Just
 just build
 
-# Or using go directly
-go build -o bin/seqctl ./cmd
+# Or with Go directly
+go build -o bin/seqctl ./cmd/seqctl
+
+# Run the web server
+./bin/seqctl web
 ```
 
-### Using Nix
-
-If you have Nix installed:
-
-```bash
-# Enter development shell
-nix develop
-
-# Build the project
-just build
-```
-
-## Usage
-
-### Interactive TUI (Default)
-
-The TUI provides a real-time view of your sequencer networks:
-
-```bash
-# Launch TUI for a specific network
-seqctl <network-name>
-
-# Launch TUI with specific kubeconfig
-seqctl --k8s-config ~/.kube/config <network-name>
-```
+Access the dashboard at `http://localhost:8080`
 
 ## Configuration
 
-Configuration can be provided through multiple sources (in order of precedence):
-
-1. Command-line flags
-2. Environment variables (prefixed with `SEQCTL_`)
-3. Configuration file
-
-### Configuration Options
-
-```toml
-# config.toml example
-[k8s]
-config = "/path/to/kubeconfig"  # Path to kubeconfig (uses in-cluster config if empty)
-namespace = ""                  # Namespace to search (empty = all namespaces)
-selector = "app=op-conductor"   # Label selector for sequencer pods
-
-[log]
-level = "info"                  # Log level: debug, info, warn, error
-format = "text"                 # Log format: text or json
-```
-
-### Environment Variables
+Configure via CLI flags, environment variables, or config file:
 
 ```bash
-export SEQCTL_K8S_CONFIG="/path/to/kubeconfig"
+# CLI flags
+seqctl web --port 8080 --k8s-selector "app=op-conductor"
+
+# Environment variables
+export SEQCTL_WEB_PORT=8080
 export SEQCTL_K8S_SELECTOR="app=op-conductor"
-export SEQCTL_LOG_LEVEL="debug"
-export SEQCTL_REFRESH_INTERVAL="5s"
-export SEQCTL_AUTO_REFRESH="true"
+seqctl web
+
+# Config file
+seqctl web --config ./config.toml
 ```
 
-## Kubernetes Setup
+See [Configuration Guide](https://golem-base.github.io/seqctl/configuration/) for all options.
 
-### Required Permissions
+## Use Cases
 
-The tool requires the following Kubernetes permissions:
+### Monitor Sequencer Health
 
-```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: seqctl
-rules:
-  - apiGroups: ["apps"]
-    resources: ["statefulsets"]
-    verbs: ["get", "list"]
-  - apiGroups: [""]
-    resources: ["services", "pods", "pods/log"]
-    verbs: ["get", "list"]
-  - apiGroups: [""]
-    resources: ["pods/proxy"]
-    verbs: ["get", "create"]
+View real-time status of all sequencers in your network, including sync status, leadership, and Raft cluster health.
+
+### Perform Maintenance
+
+Safely pause conductors for maintenance, transfer leadership before updates, and resume operations without downtime.
+
+### Manage Failures
+
+Override leader status during split-brain scenarios, force sequencers active, or halt problematic nodes.
+
+### Automate Operations
+
+Use the REST API to integrate with your existing automation, monitoring, and alerting systems.
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guide](https://golem-base.github.io/seqctl/developer-guide/contributing/) for details.
+
+```bash
+# Setup development environment
+just dev
+
+# Run tests
+just test
+
+# Build and run locally
+just run
 ```
-
-### Expected Kubernetes Resources
-
-The tool discovers sequencers from StatefulSets with the following structure:
-
-- StatefulSets labeled with the configured selector
-- Services matching the StatefulSet names
-- Container named `op-conductor` with conductor RPC on port 8545
-- Container named `op-node` with node RPC on port 8547
-
-## Development
-
-### Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## Troubleshooting
-
-### Common Issues
-
-**Cannot connect to Kubernetes cluster**
-
-- Ensure your kubeconfig is valid: `kubectl cluster-info`
-- Check if you have the required permissions: `kubectl auth can-i list statefulsets`
-
-**No networks discovered**
-
-- Verify the label selector matches your StatefulSets: `kubectl get statefulsets -l app=op-conductor`
-- Check if sequencers are in the expected namespace
-
-**RPC connection failures**
-
-- Ensure the Kubernetes API proxy is enabled
-- Check if the pods are running: `kubectl get pods -l app=op-conductor`
-- Verify the container ports are correctly configured
 
 ## License
 
-See [LICENSE](./LICENSE) for more information.
+This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+Built with love by the [Golem Base](https://github.com/golem-base) team.
+
+Special thanks to the [Optimism](https://optimism.io) community for the conductor sequencer architecture.

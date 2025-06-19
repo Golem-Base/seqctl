@@ -122,3 +122,8 @@ func (n *Network) UpdateSuccessful() bool {
 	defer n.mu.Unlock()
 	return n.updateError == nil && !n.lastUpdateTime.IsZero()
 }
+
+// UpdatedAt returns the time of the last update (alias for LastUpdateTime)
+func (n *Network) UpdatedAt() time.Time {
+	return n.LastUpdateTime()
+}

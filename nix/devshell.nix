@@ -3,10 +3,9 @@ perSystem.devshell.mkShell {
   packages = [
     # go
     pkgs.go
-
-    # python
-    pkgs.poetry
-    pkgs.python312
+    pkgs.goreleaser
+    pkgs.revive
+    pkgs.templ
 
     # k8s
     pkgs.k9s
@@ -20,6 +19,7 @@ perSystem.devshell.mkShell {
 
     # other
     perSystem.self.formatter
+    pkgs.go-swag
     pkgs.just
   ];
 
@@ -31,17 +31,6 @@ perSystem.devshell.mkShell {
     {
       name = "NIX_DIR";
       eval = "$PRJ_ROOT/nix";
-    }
-
-    {
-      # Configure Poetry to use the Python version from Nix
-      name = "POETRY_VIRTUALENVS_PATH";
-      value = "./.venv";
-    }
-    {
-      # keep Poetry's virtual environments in the project
-      name = "POETRY_VIRTUALENVS_IN_PROJECT";
-      value = "true";
     }
   ];
 

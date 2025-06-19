@@ -1,4 +1,4 @@
-name: Nix Fmt
+name: Nix Flake Check
 
 on:
   push:

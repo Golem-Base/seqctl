@@ -1,0 +1,1378 @@
+package templates
+
+import (
+	"fmt"
+	"github.com/golem-base/seqctl/pkg/network"
+	"github.com/golem-base/seqctl/pkg/sequencer"
+)
+
+templ NetworkDetail(net *network.Network, refreshInterval int) {
+	@Base(fmt.Sprintf("Network: %s", net.Name()), refreshInterval) {
+		<script>
+			document.addEventListener('alpine:init', () => {
+				Alpine.data('sequencersTable', () => ({
+					autoRefreshEnabled: true,
+					refreshInterval: null,
+
+					init() {
+						// Listen for toggle-refresh events
+						window.addEventListener('toggle-refresh', (event) => {
+							this.autoRefreshEnabled = event.detail.enabled;
+							if (this.autoRefreshEnabled) {
+								this.startAutoRefresh();
+							} else {
+								this.stopAutoRefresh();
+							}
+						});
+
+						// Listen for successful HTMX requests to trigger refresh
+						document.body.addEventListener('htmx:afterRequest', (event) => {
+							if (event.detail.successful && event.detail.pathInfo.requestPath.includes('/api/v1/sequencers/')) {
+								// Refresh the table after successful action
+								setTimeout(() => {
+									const tbody = document.querySelector('tbody[hx-get]');
+									if (tbody) {
+										htmx.trigger(tbody, 'refresh');
+									}
+								}, 500);
+							}
+						});
+
+						// Start auto-refresh if enabled
+						if (this.autoRefreshEnabled) {
+							this.startAutoRefresh();
+						}
+					},
+
+					startAutoRefresh() {
+						// Clear any existing interval
+						if (this.refreshInterval) {
+							clearInterval(this.refreshInterval);
+						}
+
+						// Set up new interval using configured value
+						const intervalMs = (window.SEQCTL_CONFIG?.refreshInterval || 5) * 1000;
+						this.refreshInterval = setInterval(() => {
+							const tbody = document.querySelector('tbody[hx-get]');
+							if (tbody && this.autoRefreshEnabled) {
+								htmx.trigger(tbody, 'refresh');
+							}
+						}, intervalMs);
+					},
+
+					stopAutoRefresh() {
+						if (this.refreshInterval) {
+							clearInterval(this.refreshInterval);
+							this.refreshInterval = null;
+						}
+					},
+
+					processSequencersResponse(event) {
+						const sequencers = JSON.parse(event.detail.xhr.responseText);
+						const tbody = event.detail.target;
+						tbody.innerHTML = '';
+
+						sequencers.forEach(seq => {
+							const row = document.createElement('tr');
+							let actionsHtml = this.buildActionsMenu(seq);
+
+							row.innerHTML = `
+								<td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 dark:text-gray-100 sm:pl-6">
+									<div class="group relative">
+										<div class="flex items-center">
+											${seq.id}
+											${seq.voting ? '<span class="ml-2 inline-flex items-center rounded-md bg-blue-50 dark:bg-blue-900/20 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-400 ring-1 ring-inset ring-blue-700/10 dark:ring-blue-500/20">Voter</span>' : ''}
+											<svg class="ml-1 h-4 w-4 text-gray-400 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+											</svg>
+										</div>
+										<div class="absolute left-0 bottom-full mb-2 hidden group-hover:block z-10 px-3 py-2 text-xs font-medium text-white bg-gray-900 dark:bg-gray-700 rounded-lg shadow-sm whitespace-nowrap">
+											Raft: ${seq.raft_addr}
+											<div class="absolute top-full left-4 -mt-1 h-2 w-2 rotate-45 bg-gray-900 dark:bg-gray-700"></div>
+										</div>
+									</div>
+								</td>
+								<td class="whitespace-nowrap px-3 py-4 text-sm">
+									<div class="font-mono text-gray-900 dark:text-gray-100">
+										${seq.unsafe_l2}
+									</div>
+								</td>
+								<td class="whitespace-nowrap px-3 py-4 text-sm">
+									<div class="flex items-center space-x-2">
+										${seq.conductor_active ?
+											'<span class="inline-flex items-center rounded-md bg-green-50 dark:bg-green-900/20 px-2 py-1 text-xs font-medium text-green-700 dark:text-green-400 ring-1 ring-inset ring-green-600/20 dark:ring-green-500/20">Active</span>' :
+											'<span class="inline-flex items-center rounded-md bg-gray-50 dark:bg-gray-800 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 ring-1 ring-inset ring-gray-500/10 dark:ring-gray-600/20">Paused</span>'
+										}
+										${seq.conductor_leader ?
+											'<span class="inline-flex items-center rounded-md bg-purple-50 dark:bg-purple-900/20 px-2 py-1 text-xs font-medium text-purple-700 dark:text-purple-400 ring-1 ring-inset ring-purple-700/10 dark:ring-purple-500/20">Leader</span>' :
+											''
+										}
+									</div>
+								</td>
+								<td class="whitespace-nowrap px-3 py-4 text-sm">
+									<div class="flex items-center space-x-2">
+										${seq.sequencer_healthy ?
+											'<span class="inline-flex items-center rounded-md bg-green-50 dark:bg-green-900/20 px-2 py-1 text-xs font-medium text-green-700 dark:text-green-400 ring-1 ring-inset ring-green-600/20 dark:ring-green-500/20">Healthy</span>' :
+											'<span class="inline-flex items-center rounded-md bg-red-50 dark:bg-red-900/20 px-2 py-1 text-xs font-medium text-red-700 dark:text-red-400 ring-1 ring-inset ring-red-600/10 dark:ring-red-500/20">Unhealthy</span>'
+										}
+										${seq.sequencer_active ?
+											'<span class="inline-flex items-center rounded-md bg-blue-50 dark:bg-blue-900/20 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-400 ring-1 ring-inset ring-blue-700/10 dark:ring-blue-500/20">Active</span>' :
+											''
+										}
+									</div>
+								</td>
+								<td class="whitespace-nowrap px-3 py-4 text-sm">
+									<div class="flex items-center space-x-2">
+										${actionsHtml}
+									</div>
+								</td>
+							`;
+							tbody.appendChild(row);
+
+							// Re-process HTMX and Alpine.js for the new buttons
+							htmx.process(row);
+							// Initialize Alpine components in the new row
+							Alpine.initTree(row);
+						});
+					},
+
+					buildActionsMenu(seq) {
+						let menuItems = '';
+
+						// Pause/Resume Conductor
+						if (seq.conductor_active) {
+							menuItems += `
+								<button
+									type="button"
+									@click="openPauseModal('${seq.id}'); open = false"
+									class="text-gray-700 dark:text-gray-300 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+								>
+									Pause Conductor
+								</button>
+							`;
+						} else {
+							menuItems += `
+								<button
+									type="button"
+									@click="openResumeModal('${seq.id}'); open = false"
+									class="text-gray-700 dark:text-gray-300 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+								>
+									Resume Conductor
+								</button>
+							`;
+						}
+
+						// Transfer Leadership
+						if (!seq.conductor_leader) {
+							menuItems += `
+								<button
+									type="button"
+									@click="openTransferModal('${seq.id}'); open = false"
+									class="text-gray-700 dark:text-gray-300 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+								>
+									Transfer Leadership
+								</button>
+							`;
+						}
+
+						// Resign Leader (only show if current leader)
+						if (seq.conductor_leader) {
+							menuItems += `
+								<button
+									type="button"
+									@click="openResignModal('${seq.id}'); open = false"
+									class="text-gray-700 dark:text-gray-300 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+								>
+									Resign Leadership
+								</button>
+							`;
+						}
+
+						// Override Leader
+						menuItems += `
+							<button
+								type="button"
+								@click="openOverrideModal('${seq.id}'); open = false"
+								class="text-gray-700 dark:text-gray-300 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+							>
+								Override Leader
+							</button>
+						`;
+
+						// Halt/Force Active Sequencer
+						if (seq.sequencer_active) {
+							menuItems += `
+								<button
+									type="button"
+									@click="openHaltModal('${seq.id}'); open = false"
+									class="text-gray-700 dark:text-gray-300 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+								>
+									Halt Sequencer
+								</button>
+							`;
+						} else {
+							menuItems += `
+								<button
+									type="button"
+									@click="openForceActiveModal('${seq.id}'); open = false"
+									class="text-gray-700 dark:text-gray-300 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+								>
+									Force Active
+								</button>
+							`;
+						}
+
+						// Leader-only actions
+						if (seq.conductor_leader) {
+							menuItems += `
+								<div class="border-t border-gray-100 dark:border-gray-700">
+									<button
+										type="button"
+										@click="openMembershipModal('${seq.id}'); open = false"
+										class="text-gray-700 dark:text-gray-300 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+									>
+										Update Membership
+									</button>
+									<button
+										type="button"
+										@click="openRemoveModal('${seq.id}'); open = false"
+										class="text-gray-700 dark:text-gray-300 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+									>
+										Remove Server
+									</button>
+								</div>
+							`;
+						}
+
+						return `
+							<div class="relative inline-block text-left" x-data="{
+								open: false,
+								toggle() {
+									this.open = !this.open;
+									if (this.open) {
+										this.$nextTick(() => {
+											this.checkPosition();
+										});
+									}
+								},
+								checkPosition() {
+									const button = this.$el.querySelector('button');
+									const dropdown = this.$el.querySelector('[x-show]');
+									const buttonRect = button.getBoundingClientRect();
+									const dropdownHeight = 300; // Approximate height
+									const spaceBelow = window.innerHeight - buttonRect.bottom;
+
+									if (spaceBelow < dropdownHeight) {
+										// Open upward
+										dropdown.classList.remove('mt-2', 'origin-top-right');
+										dropdown.classList.add('mb-2', 'origin-bottom-right', 'bottom-full');
+									} else {
+										// Open downward (default)
+										dropdown.classList.remove('mb-2', 'origin-bottom-right', 'bottom-full');
+										dropdown.classList.add('mt-2', 'origin-top-right');
+									}
+								}
+							}">
+								<button @click="toggle()" type="button" class="inline-flex w-full justify-center gap-x-1.5 rounded-md bg-white dark:bg-gray-800 px-3 py-2 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700">
+									Actions
+									<svg class="-mr-1 h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+										<path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"></path>
+									</svg>
+								</button>
+								<div
+									x-show="open"
+									@click.away="open = false"
+									x-transition:enter="transition ease-out duration-100"
+									x-transition:enter-start="transform opacity-0 scale-95"
+									x-transition:enter-end="transform opacity-100 scale-100"
+									x-transition:leave="transition ease-in duration-75"
+									x-transition:leave-start="transform opacity-100 scale-100"
+									x-transition:leave-end="transform opacity-0 scale-95"
+									class="absolute right-0 z-50 mt-2 w-56 origin-top-right rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 dark:ring-gray-700 focus:outline-none"
+									style="display: none;"
+								>
+									<div class="py-1 max-h-96 overflow-y-auto">
+										${menuItems}
+									</div>
+								</div>
+							</div>
+						`;
+					}
+				}))
+			});
+		</script>
+		<div class="px-4 sm:px-6 lg:px-8 pb-96">
+			<div class="sm:flex sm:items-center">
+				<div class="sm:flex-auto">
+					<h1 class="text-2xl font-semibold leading-6 text-gray-900 dark:text-gray-100">{ net.Name() }</h1>
+					<p class="mt-2 text-sm text-gray-700 dark:text-gray-300">
+						Manage sequencers in this network
+					</p>
+				</div>
+				<div class="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
+					<a href="/" class="block rounded-md bg-gray-600 dark:bg-gray-700 px-3 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-gray-500 dark:hover:bg-gray-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600">
+						Back to Networks
+					</a>
+				</div>
+			</div>
+			<!-- Network Summary -->
+			<div class="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+				<div class="overflow-hidden rounded-lg bg-white dark:bg-gray-800 px-4 py-5 shadow sm:p-6">
+					<dt class="truncate text-sm font-medium text-gray-500 dark:text-gray-400">Total Sequencers</dt>
+					<dd class="mt-1 text-3xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">{ fmt.Sprintf("%d", len(net.Sequencers())) }</dd>
+				</div>
+				<div class="overflow-hidden rounded-lg bg-white dark:bg-gray-800 px-4 py-5 shadow sm:p-6">
+					<dt class="truncate text-sm font-medium text-gray-500 dark:text-gray-400">Current Leader</dt>
+					<dd class="mt-1 text-lg font-medium text-gray-900 dark:text-gray-100">
+						if leader := net.ConductorLeader(); leader != nil {
+							{ leader.ID() }
+						} else {
+							<span class="text-gray-400 dark:text-gray-600">None</span>
+						}
+					</dd>
+				</div>
+				<div class="overflow-hidden rounded-lg bg-white dark:bg-gray-800 px-4 py-5 shadow sm:p-6">
+					<dt class="truncate text-sm font-medium text-gray-500 dark:text-gray-400">Active Sequencer</dt>
+					<dd class="mt-1 text-lg font-medium text-gray-900 dark:text-gray-100">
+						if active := net.ActiveSequencer(); active != nil {
+							{ active.ID() }
+						} else {
+							<span class="text-gray-400 dark:text-gray-600">None</span>
+						}
+					</dd>
+				</div>
+				<div class="overflow-hidden rounded-lg bg-white dark:bg-gray-800 px-4 py-5 shadow sm:p-6">
+					<dt class="truncate text-sm font-medium text-gray-500 dark:text-gray-400">Network Health</dt>
+					<dd class="mt-1">
+						if net.IsHealthy() {
+							<span class="inline-flex items-center rounded-md bg-green-50 dark:bg-green-900/20 px-3 py-1 text-sm font-medium text-green-700 dark:text-green-400 ring-1 ring-inset ring-green-600/20 dark:ring-green-500/20">
+								Healthy
+							</span>
+						} else {
+							<span class="inline-flex items-center rounded-md bg-red-50 dark:bg-red-900/20 px-3 py-1 text-sm font-medium text-red-700 dark:text-red-400 ring-1 ring-inset ring-red-600/10 dark:ring-red-500/20">
+								Unhealthy
+							</span>
+						}
+					</dd>
+				</div>
+			</div>
+			<div class="mt-8 flow-root" x-data="sequencersTable">
+				<div class="-mx-4 -my-2 sm:-mx-6 lg:-mx-8" style="overflow: visible;">
+					<div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+						<div class="shadow ring-1 ring-black ring-opacity-5 dark:ring-gray-700 sm:rounded-lg relative" style="overflow: visible;">
+							<table class="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+								<thead class="bg-gray-50 dark:bg-gray-800">
+									<tr>
+										<th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 sm:pl-6">
+											Sequencer ID
+										</th>
+										<th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
+											Unsafe L2 Block
+										</th>
+										<th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
+											Conductor
+										</th>
+										<th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
+											Sequencer
+										</th>
+										<th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
+											Actions
+										</th>
+									</tr>
+								</thead>
+								<tbody
+									class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900"
+									id="sequencer-table"
+									hx-get={ fmt.Sprintf("/api/v1/networks/%s/sequencers", net.Name()) }
+									hx-trigger="load, refresh"
+									hx-swap="none"
+									hx-target="this"
+									@htmx:after-request="processSequencersResponse($event)"
+								>
+									@sequencerRows(net.Sequencers())
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		@actionModal()
+	}
+}
+
+templ sequencerRows(sequencers []*sequencer.Sequencer) {
+	for _, seq := range sequencers {
+		<tr>
+			<td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 dark:text-gray-100 sm:pl-6">
+				<div class="group relative">
+					<div class="flex items-center">
+						{ seq.ID() }
+						if seq.Voting() {
+							<span class="ml-2 inline-flex items-center rounded-md bg-blue-50 dark:bg-blue-900/20 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-400 ring-1 ring-inset ring-blue-700/10 dark:ring-blue-500/20">
+								Voter
+							</span>
+						}
+						<svg class="ml-1 h-4 w-4 text-gray-400 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+						</svg>
+					</div>
+					<div class="absolute left-0 bottom-full mb-2 hidden group-hover:block z-10 px-3 py-2 text-xs font-medium text-white bg-gray-900 dark:bg-gray-700 rounded-lg shadow-sm whitespace-nowrap">
+						Raft: { seq.RaftAddr() }
+						<div class="absolute top-full left-4 -mt-1 h-2 w-2 rotate-45 bg-gray-900 dark:bg-gray-700"></div>
+					</div>
+				</div>
+			</td>
+			<td class="whitespace-nowrap px-3 py-4 text-sm">
+				<div class="font-mono text-gray-900 dark:text-gray-100">
+					{ fmt.Sprintf("%d", seq.UnsafeL2()) }
+				</div>
+			</td>
+			<td class="whitespace-nowrap px-3 py-4 text-sm">
+				<div class="flex items-center space-x-2">
+					if seq.ConductorActive() {
+						<span class="inline-flex items-center rounded-md bg-green-50 dark:bg-green-900/20 px-2 py-1 text-xs font-medium text-green-700 dark:text-green-400 ring-1 ring-inset ring-green-600/20 dark:ring-green-500/20">
+							Active
+						</span>
+					} else {
+						<span class="inline-flex items-center rounded-md bg-gray-50 dark:bg-gray-800 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 ring-1 ring-inset ring-gray-500/10 dark:ring-gray-600/20">
+							Paused
+						</span>
+					}
+					if seq.ConductorLeader() {
+						<span class="inline-flex items-center rounded-md bg-purple-50 dark:bg-purple-900/20 px-2 py-1 text-xs font-medium text-purple-700 dark:text-purple-400 ring-1 ring-inset ring-purple-700/10 dark:ring-purple-500/20">
+							Leader
+						</span>
+					}
+				</div>
+			</td>
+			<td class="whitespace-nowrap px-3 py-4 text-sm">
+				<div class="flex items-center space-x-2">
+					if seq.SequencerHealthy() {
+						<span class="inline-flex items-center rounded-md bg-green-50 dark:bg-green-900/20 px-2 py-1 text-xs font-medium text-green-700 dark:text-green-400 ring-1 ring-inset ring-green-600/20 dark:ring-green-500/20">
+							Healthy
+						</span>
+					} else {
+						<span class="inline-flex items-center rounded-md bg-red-50 dark:bg-red-900/20 px-2 py-1 text-xs font-medium text-red-700 dark:text-red-400 ring-1 ring-inset ring-red-600/10 dark:ring-red-500/20">
+							Unhealthy
+						</span>
+					}
+					if seq.SequencerActive() {
+						<span class="inline-flex items-center rounded-md bg-blue-50 dark:bg-blue-900/20 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-400 ring-1 ring-inset ring-blue-700/10 dark:ring-blue-500/20">
+							Active
+						</span>
+					}
+				</div>
+			</td>
+			<td class="whitespace-nowrap px-3 py-4 text-sm">
+				<div class="flex items-center space-x-2">
+					@sequencerActions(seq)
+				</div>
+			</td>
+		</tr>
+	}
+}
+
+templ sequencerActions(seq *sequencer.Sequencer) {
+	<div class="relative inline-block text-left" x-data="{ open: false }">
+		<button @click="open = !open" type="button" class="inline-flex w-full justify-center gap-x-1.5 rounded-md bg-white dark:bg-gray-800 px-3 py-2 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700">
+			Actions
+			<svg class="-mr-1 h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+				<path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"></path>
+			</svg>
+		</button>
+		<div
+			x-show="open"
+			@click.away="open = false"
+			x-transition:enter="transition ease-out duration-100"
+			x-transition:enter-start="transform opacity-0 scale-95"
+			x-transition:enter-end="transform opacity-100 scale-100"
+			x-transition:leave="transition ease-in duration-75"
+			x-transition:leave-start="transform opacity-100 scale-100"
+			x-transition:leave-end="transform opacity-0 scale-95"
+			class="absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 dark:ring-gray-700 focus:outline-none"
+		>
+			<div class="py-1">
+				if seq.ConductorActive() {
+					<button
+						type="button"
+						@click={ fmt.Sprintf("openPauseModal('%s'); open = false", seq.ID()) }
+						class="text-gray-700 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100"
+					>
+						Pause Conductor
+					</button>
+				} else {
+					<button
+						type="button"
+						@click={ fmt.Sprintf("openResumeModal('%s'); open = false", seq.ID()) }
+						class="text-gray-700 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100"
+					>
+						Resume Conductor
+					</button>
+				}
+				if !seq.ConductorLeader() {
+					<button
+						type="button"
+						@click={ fmt.Sprintf("openTransferModal('%s'); open = false", seq.ID()) }
+						class="text-gray-700 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100"
+					>
+						Transfer Leadership
+					</button>
+				}
+				if seq.ConductorLeader() {
+					<button
+						type="button"
+						@click={ fmt.Sprintf("openResignModal('%s'); open = false", seq.ID()) }
+						class="text-gray-700 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100"
+					>
+						Resign Leadership
+					</button>
+				}
+				<button
+					type="button"
+					@click={ fmt.Sprintf("openOverrideModal('%s'); open = false", seq.ID()) }
+					class="text-gray-700 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100"
+				>
+					Override Leader
+				</button>
+				if seq.SequencerActive() {
+					<button
+						type="button"
+						@click={ fmt.Sprintf("openHaltModal('%s'); open = false", seq.ID()) }
+						class="text-gray-700 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100"
+					>
+						Halt Sequencer
+					</button>
+				} else {
+					<button
+						type="button"
+						@click={ fmt.Sprintf("openForceActiveModal('%s'); open = false", seq.ID()) }
+						class="text-gray-700 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100"
+					>
+						Force Active
+					</button>
+				}
+				if seq.ConductorLeader() {
+					<div class="border-t border-gray-100 dark:border-gray-700">
+						<button
+							type="button"
+							@click={ fmt.Sprintf("openMembershipModal('%s'); open = false", seq.ID()) }
+							class="text-gray-700 dark:text-gray-300 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+						>
+							Update Membership
+						</button>
+						<button
+							type="button"
+							@click={ fmt.Sprintf("openRemoveModal('%s'); open = false", seq.ID()) }
+							class="text-gray-700 dark:text-gray-300 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+						>
+							Remove Server
+						</button>
+					</div>
+				}
+			</div>
+		</div>
+	</div>
+}
+
+templ actionModal() {
+	<div x-data="modalManager" x-init="init()">
+		<!-- Transfer Leader Modal -->
+		<div x-show="activeModal === 'transfer-leader'" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+			<div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+				<div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="closeModal()"></div>
+				<div class="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
+					<div class="bg-white dark:bg-gray-800 px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
+						<div class="sm:flex sm:items-start">
+							<div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 sm:mx-0 sm:h-10 sm:w-10">
+								<svg class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"></path>
+								</svg>
+							</div>
+							<div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+								<h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-gray-100">Transfer Leadership</h3>
+								<div class="mt-2">
+									<p class="text-sm text-gray-500 dark:text-gray-400">Select a sequencer to transfer leadership to.</p>
+								</div>
+							</div>
+						</div>
+						<div class="mt-4">
+							<div class="space-y-2">
+								<template x-for="seq in availableTargets" :key="seq.id">
+									<label class="flex items-center p-3 border dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+										<input
+											type="radio"
+											name="target"
+											:value="seq.id"
+											x-model="selectedTarget"
+											@change="targetAddr = seq.raft_addr"
+											class="h-4 w-4 text-blue-600"
+										/>
+										<div class="ml-3 flex-1">
+											<p class="text-sm font-medium text-gray-900 dark:text-gray-100" x-text="seq.id"></p>
+											<p class="text-sm text-gray-500 dark:text-gray-400" x-text="seq.raft_addr"></p>
+										</div>
+									</label>
+								</template>
+							</div>
+						</div>
+					</div>
+					<div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+						<button
+							@click="submitTransferLeader()"
+							:disabled="!selectedTarget"
+							class="inline-flex w-full justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:bg-gray-300 sm:ml-3 sm:w-auto"
+						>
+							Transfer Leadership
+						</button>
+						<button
+							@click="closeModal()"
+							type="button"
+							class="mt-3 inline-flex w-full justify-center rounded-md bg-white dark:bg-gray-700 px-3 py-2 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 sm:mt-0 sm:w-auto"
+						>
+							Cancel
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+		<!-- Override Leader Modal -->
+		<div x-show="activeModal === 'override-leader'" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+			<div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+				<div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="closeModal()"></div>
+				<div class="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
+					<div class="bg-white dark:bg-gray-800 px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
+						<div class="sm:flex sm:items-start">
+							<div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-yellow-100 sm:mx-0 sm:h-10 sm:w-10">
+								<svg class="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"></path>
+								</svg>
+							</div>
+							<div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+								<h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-gray-100">Override Leader Status</h3>
+								<div class="mt-2">
+									<p class="text-sm text-gray-500 dark:text-gray-400">
+										This will override the leader status for sequencer <strong x-text="currentSequencerId"></strong>.
+									</p>
+									<div class="mt-4 rounded-md bg-yellow-50 dark:bg-yellow-900/20 p-4">
+										<p class="text-sm text-yellow-800 dark:text-yellow-200">Warning: This can cause split-brain scenarios if not used correctly.</p>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+						<button
+							@click="submitOverrideLeader()"
+							class="inline-flex w-full justify-center rounded-md bg-yellow-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-yellow-500 sm:ml-3 sm:w-auto"
+						>
+							Override Leader
+						</button>
+						<button
+							@click="closeModal()"
+							type="button"
+							class="mt-3 inline-flex w-full justify-center rounded-md bg-white dark:bg-gray-700 px-3 py-2 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 sm:mt-0 sm:w-auto"
+						>
+							Cancel
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+		<!-- Update Membership Modal -->
+		<div x-show="activeModal === 'update-membership'" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+			<div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+				<div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="closeModal()"></div>
+				<div class="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
+					<div class="bg-white dark:bg-gray-800 px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
+						<div class="sm:flex sm:items-start">
+							<div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-green-100 sm:mx-0 sm:h-10 sm:w-10">
+								<svg class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"></path>
+								</svg>
+							</div>
+							<div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+								<h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-gray-100">Update Cluster Membership</h3>
+								<div class="mt-2">
+									<p class="text-sm text-gray-500 dark:text-gray-400">Add a new server to the cluster.</p>
+								</div>
+							</div>
+						</div>
+						<div class="mt-4 space-y-4">
+							<div>
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Server ID</label>
+								<input
+									type="text"
+									x-model="newMember.server_id"
+									placeholder="e.g., sequencer-0"
+									class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+								/>
+							</div>
+							<div>
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Server Address</label>
+								<input
+									type="text"
+									x-model="newMember.server_addr"
+									placeholder="e.g., sequencer-0.sequencer:1234"
+									class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+								/>
+							</div>
+							<div class="flex items-center">
+								<input type="checkbox" x-model="newMember.voting" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"/>
+								<label class="ml-2 block text-sm text-gray-900 dark:text-gray-100">Voting member</label>
+							</div>
+						</div>
+					</div>
+					<div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+						<button
+							@click="submitUpdateMembership()"
+							:disabled="!newMember.server_id || !newMember.server_addr"
+							class="inline-flex w-full justify-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 disabled:bg-gray-300 sm:ml-3 sm:w-auto"
+						>
+							Add Member
+						</button>
+						<button
+							@click="closeModal()"
+							type="button"
+							class="mt-3 inline-flex w-full justify-center rounded-md bg-white dark:bg-gray-700 px-3 py-2 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 sm:mt-0 sm:w-auto"
+						>
+							Cancel
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+		<!-- Remove Server Modal -->
+		<div x-show="activeModal === 'remove-server'" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+			<div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+				<div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="closeModal()"></div>
+				<div class="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
+					<div class="bg-white dark:bg-gray-800 px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
+						<div class="sm:flex sm:items-start">
+							<div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+								<svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"></path>
+								</svg>
+							</div>
+							<div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+								<h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-gray-100">Remove Server from Cluster</h3>
+								<div class="mt-2">
+									<p class="text-sm text-gray-500 dark:text-gray-400">Select a server to remove from the cluster.</p>
+								</div>
+							</div>
+						</div>
+						<div class="mt-4">
+							<div class="space-y-2">
+								<template x-for="seq in removeTargets" :key="seq.id">
+									<label class="flex items-center p-3 border dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+										<input
+											type="radio"
+											name="remove_target"
+											:value="seq.id"
+											x-model="selectedRemoveTarget"
+											class="h-4 w-4 text-red-600"
+										/>
+										<div class="ml-3 flex-1">
+											<p class="text-sm font-medium text-gray-900 dark:text-gray-100" x-text="seq.id"></p>
+											<p class="text-sm text-gray-500 dark:text-gray-400" x-text="seq.raft_addr"></p>
+										</div>
+									</label>
+								</template>
+							</div>
+							<div class="mt-4 rounded-md bg-red-50 dark:bg-red-900/20 p-4">
+								<p class="text-sm text-red-800 dark:text-red-200">Warning: Removing a voting member may affect cluster quorum.</p>
+							</div>
+						</div>
+					</div>
+					<div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+						<button
+							@click="submitRemoveServer()"
+							:disabled="!selectedRemoveTarget"
+							class="inline-flex w-full justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 disabled:bg-gray-300 sm:ml-3 sm:w-auto"
+						>
+							Remove Server
+						</button>
+						<button
+							@click="closeModal()"
+							type="button"
+							class="mt-3 inline-flex w-full justify-center rounded-md bg-white dark:bg-gray-700 px-3 py-2 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 sm:mt-0 sm:w-auto"
+						>
+							Cancel
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+		<!-- Pause Conductor Modal -->
+		<div x-show="activeModal === 'pause-conductor'" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+			<div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+				<div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="closeModal()"></div>
+				<div class="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
+					<div class="bg-white dark:bg-gray-800 px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
+						<div class="sm:flex sm:items-start">
+							<div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-yellow-100 sm:mx-0 sm:h-10 sm:w-10">
+								<svg class="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M14.25 9v6m-4.5 0V9M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+								</svg>
+							</div>
+							<div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+								<h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-gray-100">Pause Conductor</h3>
+								<div class="mt-2">
+									<p class="text-sm text-gray-500 dark:text-gray-400">
+										This will pause the conductor for sequencer <strong x-text="currentSequencerId"></strong>. The sequencer will stop participating in consensus.
+									</p>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+						<button
+							@click="submitPauseConductor()"
+							class="inline-flex w-full justify-center rounded-md bg-yellow-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-yellow-500 sm:ml-3 sm:w-auto"
+						>
+							Pause Conductor
+						</button>
+						<button
+							@click="closeModal()"
+							type="button"
+							class="mt-3 inline-flex w-full justify-center rounded-md bg-white dark:bg-gray-700 px-3 py-2 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 sm:mt-0 sm:w-auto"
+						>
+							Cancel
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+		<!-- Resume Conductor Modal -->
+		<div x-show="activeModal === 'resume-conductor'" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+			<div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+				<div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="closeModal()"></div>
+				<div class="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
+					<div class="bg-white dark:bg-gray-800 px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
+						<div class="sm:flex sm:items-start">
+							<div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-green-100 sm:mx-0 sm:h-10 sm:w-10">
+								<svg class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+									<path stroke-linecap="round" stroke-linejoin="round" d="M15.91 11.672a.375.375 0 010 .656l-5.603 3.113a.375.375 0 01-.557-.328V8.887c0-.286.307-.466.557-.327l5.603 3.112z"></path>
+								</svg>
+							</div>
+							<div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+								<h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-gray-100">Resume Conductor</h3>
+								<div class="mt-2">
+									<p class="text-sm text-gray-500 dark:text-gray-400">
+										This will resume the conductor for sequencer <strong x-text="currentSequencerId"></strong>. The sequencer will start participating in consensus again.
+									</p>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+						<button
+							@click="submitResumeConductor()"
+							class="inline-flex w-full justify-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 sm:ml-3 sm:w-auto"
+						>
+							Resume Conductor
+						</button>
+						<button
+							@click="closeModal()"
+							type="button"
+							class="mt-3 inline-flex w-full justify-center rounded-md bg-white dark:bg-gray-700 px-3 py-2 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 sm:mt-0 sm:w-auto"
+						>
+							Cancel
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+		<!-- Resign Leader Modal -->
+		<div x-show="activeModal === 'resign-leader'" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+			<div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+				<div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="closeModal()"></div>
+				<div class="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
+					<div class="bg-white dark:bg-gray-800 px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
+						<div class="sm:flex sm:items-start">
+							<div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+								<svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"></path>
+								</svg>
+							</div>
+							<div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+								<h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-gray-100">Resign Leadership</h3>
+								<div class="mt-2">
+									<p class="text-sm text-gray-500 dark:text-gray-400">
+										Are you sure you want to resign leadership for sequencer <strong x-text="currentSequencerId"></strong>? Another sequencer will be elected as the new leader.
+									</p>
+									<div class="mt-4 rounded-md bg-red-50 dark:bg-red-900/20 p-4">
+										<p class="text-sm text-red-800 dark:text-red-200">This action will trigger a new leader election in the cluster.</p>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+						<button
+							@click="submitResignLeader()"
+							class="inline-flex w-full justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 sm:ml-3 sm:w-auto"
+						>
+							Resign Leadership
+						</button>
+						<button
+							@click="closeModal()"
+							type="button"
+							class="mt-3 inline-flex w-full justify-center rounded-md bg-white dark:bg-gray-700 px-3 py-2 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 sm:mt-0 sm:w-auto"
+						>
+							Cancel
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+		<!-- Force Active Modal -->
+		<div x-show="activeModal === 'force-active'" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+			<div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+				<div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="closeModal()"></div>
+				<div class="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
+					<div class="bg-white dark:bg-gray-800 px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
+						<div class="sm:flex sm:items-start">
+							<div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-yellow-100 sm:mx-0 sm:h-10 sm:w-10">
+								<svg class="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"></path>
+								</svg>
+							</div>
+							<div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+								<h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-gray-100">Force Sequencer Active</h3>
+								<div class="mt-2">
+									<p class="text-sm text-gray-500 dark:text-gray-400">
+										This will force sequencer <strong x-text="currentSequencerId"></strong> to become the active sequencer.
+									</p>
+									<div class="mt-4 rounded-md bg-yellow-50 dark:bg-yellow-900/20 p-4">
+										<p class="text-sm text-yellow-800 dark:text-yellow-200">Warning: This should only be used in emergency situations. It may cause temporary inconsistencies if another sequencer is already active.</p>
+									</div>
+								</div>
+							</div>
+						</div>
+						<div class="mt-4">
+							<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Block Hash (optional)</label>
+							<div class="mt-1 flex rounded-md shadow-sm">
+								<input
+									type="text"
+									x-model="forceActiveBlockHash"
+									placeholder="0x0000... or leave empty for zero hash"
+									class="block w-full flex-1 rounded-none rounded-l-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+								/>
+								<button
+									type="button"
+									@click="fetchLatestBlockHash()"
+									:disabled="fetchingBlockHash"
+									class="inline-flex items-center rounded-r-md border border-l-0 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600 sm:text-sm disabled:opacity-50"
+								>
+									<span x-show="!fetchingBlockHash">Fetch Latest</span>
+									<span x-show="fetchingBlockHash">Fetching...</span>
+								</button>
+							</div>
+							<p class="mt-2 text-sm text-gray-500">
+								Specify the block hash to start from, or fetch the latest from an active sequencer.
+							</p>
+						</div>
+					</div>
+					<div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+						<button
+							@click="submitForceActive()"
+							class="inline-flex w-full justify-center rounded-md bg-yellow-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-yellow-500 sm:ml-3 sm:w-auto"
+						>
+							Force Active
+						</button>
+						<button
+							@click="closeModal()"
+							type="button"
+							class="mt-3 inline-flex w-full justify-center rounded-md bg-white dark:bg-gray-700 px-3 py-2 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 sm:mt-0 sm:w-auto"
+						>
+							Cancel
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+		<!-- Halt Sequencer Modal -->
+		<div x-show="activeModal === 'halt-sequencer'" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+			<div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+				<div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="closeModal()"></div>
+				<div class="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
+					<div class="bg-white dark:bg-gray-800 px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
+						<div class="sm:flex sm:items-start">
+							<div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+								<svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"></path>
+								</svg>
+							</div>
+							<div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+								<h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-gray-100">Halt Sequencer</h3>
+								<div class="mt-2">
+									<p class="text-sm text-gray-500 dark:text-gray-400">
+										This will halt sequencer <strong x-text="currentSequencerId"></strong> and stop it from processing transactions.
+									</p>
+									<div class="mt-4 rounded-md bg-red-50 dark:bg-red-900/20 p-4">
+										<p class="text-sm text-red-800 dark:text-red-200">Warning: This will immediately stop the sequencer from producing blocks. Another sequencer must take over.</p>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+						<button
+							@click="submitHaltSequencer()"
+							class="inline-flex w-full justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 sm:ml-3 sm:w-auto"
+						>
+							Halt Sequencer
+						</button>
+						<button
+							@click="closeModal()"
+							type="button"
+							class="mt-3 inline-flex w-full justify-center rounded-md bg-white dark:bg-gray-700 px-3 py-2 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 sm:mt-0 sm:w-auto"
+						>
+							Cancel
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	<script>
+		document.addEventListener('alpine:init', () => {
+			Alpine.data('modalManager', () => ({
+				activeModal: null,
+				currentSequencerId: null,
+				selectedTarget: null,
+				targetAddr: null,
+				availableTargets: [],
+				removeTargets: [],
+				selectedRemoveTarget: null,
+				newMember: {
+					server_id: '',
+					server_addr: '',
+					voting: true
+				},
+				forceActiveBlockHash: '',
+				fetchingBlockHash: false,
+
+				init() {
+					window.openTransferModal = this.openTransferModal.bind(this);
+					window.openOverrideModal = this.openOverrideModal.bind(this);
+					window.openMembershipModal = this.openMembershipModal.bind(this);
+					window.openRemoveModal = this.openRemoveModal.bind(this);
+					window.openPauseModal = this.openPauseModal.bind(this);
+					window.openResumeModal = this.openResumeModal.bind(this);
+					window.openResignModal = this.openResignModal.bind(this);
+					window.openForceActiveModal = this.openForceActiveModal.bind(this);
+					window.openHaltModal = this.openHaltModal.bind(this);
+				},
+
+				async openTransferModal(sequencerId) {
+					this.currentSequencerId = sequencerId;
+					// Fetch available targets from the same network
+					try {
+						const response = await fetch(`/api/v1/networks/${document.querySelector('h1').textContent}/sequencers`);
+						const sequencers = await response.json();
+						// Filter out the current sequencer and non-voting members
+						this.availableTargets = sequencers.filter(s => s.id !== sequencerId && s.voting);
+					} catch (error) {
+						console.error('Failed to fetch sequencers:', error);
+					}
+					this.activeModal = 'transfer-leader';
+				},
+
+				openOverrideModal(sequencerId) {
+					this.currentSequencerId = sequencerId;
+					this.activeModal = 'override-leader';
+				},
+
+				openMembershipModal(sequencerId) {
+					this.currentSequencerId = sequencerId;
+					this.newMember = { server_id: '', server_addr: '', voting: true };
+					this.activeModal = 'update-membership';
+				},
+
+				async openRemoveModal(sequencerId) {
+					this.currentSequencerId = sequencerId;
+					// Fetch sequencers to remove
+					try {
+						const response = await fetch(`/api/v1/networks/${document.querySelector('h1').textContent}/sequencers`);
+						const sequencers = await response.json();
+						// Filter out the current sequencer (can't remove self)
+						this.removeTargets = sequencers.filter(s => s.id !== sequencerId);
+					} catch (error) {
+						console.error('Failed to fetch sequencers:', error);
+					}
+					this.activeModal = 'remove-server';
+				},
+
+				openPauseModal(sequencerId) {
+					this.currentSequencerId = sequencerId;
+					this.activeModal = 'pause-conductor';
+				},
+
+				openResumeModal(sequencerId) {
+					this.currentSequencerId = sequencerId;
+					this.activeModal = 'resume-conductor';
+				},
+
+				openResignModal(sequencerId) {
+					this.currentSequencerId = sequencerId;
+					this.activeModal = 'resign-leader';
+				},
+
+				openForceActiveModal(sequencerId) {
+					this.currentSequencerId = sequencerId;
+					this.forceActiveBlockHash = '';
+					this.activeModal = 'force-active';
+				},
+
+				openHaltModal(sequencerId) {
+					this.currentSequencerId = sequencerId;
+					this.activeModal = 'halt-sequencer';
+				},
+
+				closeModal() {
+					this.activeModal = null;
+					this.selectedTarget = null;
+					this.targetAddr = null;
+					this.selectedRemoveTarget = null;
+				},
+
+				async submitTransferLeader() {
+					if (!this.selectedTarget || !this.targetAddr) return;
+
+					try {
+						const response = await fetch(`/api/v1/sequencers/${this.currentSequencerId}/transfer-leader`, {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({
+								target_id: this.selectedTarget,
+								target_addr: this.targetAddr
+							})
+						});
+
+						if (response.ok) {
+							this.closeModal();
+							htmx.trigger(document.querySelector('tbody[hx-get]'), 'refresh');
+						} else {
+							const error = await response.json();
+							alert(error.detail || 'Failed to transfer leadership');
+						}
+					} catch (error) {
+						console.error('Error:', error);
+						alert('Failed to transfer leadership');
+					}
+				},
+
+				async submitOverrideLeader() {
+					try {
+						const response = await fetch(`/api/v1/sequencers/${this.currentSequencerId}/override-leader`, {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({ override: true })
+						});
+
+						if (response.ok) {
+							this.closeModal();
+							htmx.trigger(document.querySelector('tbody[hx-get]'), 'refresh');
+						} else {
+							const error = await response.json();
+							alert(error.detail || 'Failed to override leader');
+						}
+					} catch (error) {
+						console.error('Error:', error);
+						alert('Failed to override leader');
+					}
+				},
+
+				async submitUpdateMembership() {
+					if (!this.newMember.server_id || !this.newMember.server_addr) return;
+
+					try {
+						const response = await fetch(`/api/v1/sequencers/${this.currentSequencerId}/membership`, {
+							method: 'PUT',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify(this.newMember)
+						});
+
+						if (response.ok) {
+							this.closeModal();
+							htmx.trigger(document.querySelector('tbody[hx-get]'), 'refresh');
+						} else {
+							const error = await response.json();
+							alert(error.detail || 'Failed to update membership');
+						}
+					} catch (error) {
+						console.error('Error:', error);
+						alert('Failed to update membership');
+					}
+				},
+
+				async submitRemoveServer() {
+					if (!this.selectedRemoveTarget) return;
+
+					try {
+						const response = await fetch(`/api/v1/sequencers/${this.currentSequencerId}/membership`, {
+							method: 'DELETE',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({ server_id: this.selectedRemoveTarget })
+						});
+
+						if (response.ok) {
+							this.closeModal();
+							htmx.trigger(document.querySelector('tbody[hx-get]'), 'refresh');
+						} else {
+							const error = await response.json();
+							alert(error.detail || 'Failed to remove server');
+						}
+					} catch (error) {
+						console.error('Error:', error);
+						alert('Failed to remove server');
+					}
+				},
+
+				async submitPauseConductor() {
+					try {
+						const response = await fetch(`/api/v1/sequencers/${this.currentSequencerId}/pause`, {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' }
+						});
+
+						if (response.ok) {
+							this.closeModal();
+							htmx.trigger(document.querySelector('tbody[hx-get]'), 'refresh');
+						} else {
+							const error = await response.json();
+							alert(error.detail || 'Failed to pause conductor');
+						}
+					} catch (error) {
+						console.error('Error:', error);
+						alert('Failed to pause conductor');
+					}
+				},
+
+				async submitResumeConductor() {
+					try {
+						const response = await fetch(`/api/v1/sequencers/${this.currentSequencerId}/resume`, {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' }
+						});
+
+						if (response.ok) {
+							this.closeModal();
+							htmx.trigger(document.querySelector('tbody[hx-get]'), 'refresh');
+						} else {
+							const error = await response.json();
+							alert(error.detail || 'Failed to resume conductor');
+						}
+					} catch (error) {
+						console.error('Error:', error);
+						alert('Failed to resume conductor');
+					}
+				},
+
+				async submitResignLeader() {
+					try {
+						const response = await fetch(`/api/v1/sequencers/${this.currentSequencerId}/resign-leader`, {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' }
+						});
+
+						if (response.ok) {
+							this.closeModal();
+							htmx.trigger(document.querySelector('tbody[hx-get]'), 'refresh');
+						} else {
+							const error = await response.json();
+							alert(error.detail || 'Failed to resign leadership');
+						}
+					} catch (error) {
+						console.error('Error:', error);
+						alert('Failed to resign leadership');
+					}
+				},
+
+				async submitForceActive() {
+					try {
+						const body = {};
+						if (this.forceActiveBlockHash) {
+							body.block_hash = this.forceActiveBlockHash;
+						}
+
+						const response = await fetch(`/api/v1/sequencers/${this.currentSequencerId}/force-active`, {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify(body)
+						});
+
+						if (response.ok) {
+							this.closeModal();
+							htmx.trigger(document.querySelector('tbody[hx-get]'), 'refresh');
+						} else {
+							const error = await response.json();
+							alert(error.detail || 'Failed to force sequencer active');
+						}
+					} catch (error) {
+						console.error('Error:', error);
+						alert('Failed to force sequencer active');
+					}
+				},
+
+				async submitHaltSequencer() {
+					try {
+						const response = await fetch(`/api/v1/sequencers/${this.currentSequencerId}/halt`, {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' }
+						});
+
+						if (response.ok) {
+							this.closeModal();
+							htmx.trigger(document.querySelector('tbody[hx-get]'), 'refresh');
+						} else {
+							const error = await response.json();
+							alert(error.detail || 'Failed to halt sequencer');
+						}
+					} catch (error) {
+						console.error('Error:', error);
+						alert('Failed to halt sequencer');
+					}
+				},
+
+				async fetchLatestBlockHash() {
+					this.fetchingBlockHash = true;
+					try {
+						// Get the network name and fetch sequencers
+						const networkName = document.querySelector('h1').textContent;
+						const response = await fetch(`/api/v1/networks/${networkName}/sequencers`);
+						const sequencers = await response.json();
+
+						// Find an active sequencer that's not the current one
+						const activeSequencer = sequencers.find(s =>
+							s.id !== this.currentSequencerId &&
+							s.sequencer_active &&
+							s.sequencer_healthy
+						);
+
+						if (!activeSequencer) {
+							alert('No active healthy sequencer found to fetch block hash from');
+							return;
+						}
+
+						// For now, we'll use the unsafe_l2 block number as a reference
+						// In a real implementation, you'd have an API endpoint to get the actual block hash
+						alert(`Found active sequencer ${activeSequencer.id} at block ${activeSequencer.unsafe_l2}.\n\nNote: Direct block hash fetching is not yet implemented. Please manually input the block hash.`);
+
+						// You could enhance this by adding an API endpoint to fetch the actual block hash
+						// For example: /api/v1/sequencers/{id}/latest-block
+
+					} catch (error) {
+						console.error('Error fetching block hash:', error);
+						alert('Failed to fetch latest block hash');
+					} finally {
+						this.fetchingBlockHash = false;
+					}
+				}
+			}));
+		});
+	</script>
+}
