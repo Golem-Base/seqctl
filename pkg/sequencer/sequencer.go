@@ -33,6 +33,8 @@ type Config struct {
 type Status struct {
 	ConductorActive  bool
 	ConductorLeader  bool
+	ConductorPaused  bool
+	ConductorStopped bool
 	SequencerHealthy bool
 	SequencerActive  bool
 	UnsafeL2         *eth.L2BlockRef
@@ -41,8 +43,10 @@ type Status struct {
 
 // Sequencer represents a sequencer in a network
 type Sequencer struct {
-	Config Config
-	Status Status
+	Config      Config
+	Status      Status
+	Network     string // Network this sequencer belongs to
+	IsBootstrap bool   // Whether this is a bootstrap node
 
 	conductorClient *rpc.APIClient
 	nodeClient      *sources.RollupClient
@@ -52,8 +56,8 @@ type Sequencer struct {
 	lastErrorTime time.Time
 }
 
-// NewSequencer creates a new sequencer instance
-func NewSequencer(config Config) *Sequencer {
+// New creates a new sequencer instance
+func New(config Config) *Sequencer {
 	// Set default timeout if not specified
 	if config.Timeout == 0 {
 		config.Timeout = 5 * time.Second
@@ -62,6 +66,11 @@ func NewSequencer(config Config) *Sequencer {
 	return &Sequencer{
 		Config: config,
 	}
+}
+
+// NewSequencer creates a new sequencer instance (deprecated, use New)
+func NewSequencer(config Config) *Sequencer {
+	return New(config)
 }
 
 // Initialize establishes connections to the conductor and node RPC endpoints
@@ -178,6 +187,30 @@ func (s *Sequencer) Update(ctx context.Context) error {
 			return fmt.Errorf("conductor leader check failed for sequencer %s: %w", s.Config.ID, err)
 		}
 		status.ConductorLeader = leader
+		return nil
+	})
+
+	g.Go(func() error {
+		paused, err := s.conductorClient.Paused(ctx)
+		if err != nil {
+			slog.Debug("Conductor paused check failed",
+				"sequencer", s.Config.ID,
+				"error", err)
+			return fmt.Errorf("conductor paused check failed for sequencer %s: %w", s.Config.ID, err)
+		}
+		status.ConductorPaused = paused
+		return nil
+	})
+
+	g.Go(func() error {
+		stopped, err := s.conductorClient.Stopped(ctx)
+		if err != nil {
+			slog.Debug("Conductor stopped check failed",
+				"sequencer", s.Config.ID,
+				"error", err)
+			return fmt.Errorf("conductor stopped check failed for sequencer %s: %w", s.Config.ID, err)
+		}
+		status.ConductorStopped = stopped
 		return nil
 	})
 
@@ -482,4 +515,148 @@ func (s *Sequencer) OverrideNodeLeader(ctx context.Context) error {
 		return fmt.Errorf("failed to override node leader for sequencer %s: %w", s.Config.ID, err)
 	}
 	return nil
+}
+
+// IsPaused checks if the conductor is paused
+func (s *Sequencer) IsPaused(ctx context.Context) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.ensureInitialized(); err != nil {
+		return false, err
+	}
+
+	paused, err := s.conductorClient.Paused(ctx)
+	if err != nil {
+		slog.Error("Failed to check paused status",
+			"sequencer", s.Config.ID,
+			"error", err)
+		return false, fmt.Errorf("failed to check paused status for sequencer %s: %w", s.Config.ID, err)
+	}
+	return paused, nil
+}
+
+// IsStopped checks if the conductor is stopped
+func (s *Sequencer) IsStopped(ctx context.Context) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.ensureInitialized(); err != nil {
+		return false, err
+	}
+
+	stopped, err := s.conductorClient.Stopped(ctx)
+	if err != nil {
+		slog.Error("Failed to check stopped status",
+			"sequencer", s.Config.ID,
+			"error", err)
+		return false, fmt.Errorf("failed to check stopped status for sequencer %s: %w", s.Config.ID, err)
+	}
+	return stopped, nil
+}
+
+// GetLeaderWithID returns the current leader's server info
+func (s *Sequencer) GetLeaderWithID(ctx context.Context) (*consensus.ServerInfo, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.ensureInitialized(); err != nil {
+		return nil, err
+	}
+
+	info, err := s.conductorClient.LeaderWithID(ctx)
+	if err != nil {
+		slog.Error("Failed to get leader with ID",
+			"sequencer", s.Config.ID,
+			"error", err)
+		return nil, fmt.Errorf("failed to get leader with ID for sequencer %s: %w", s.Config.ID, err)
+	}
+	return info, nil
+}
+
+// TransferLeader transfers leadership (resigns from leadership)
+func (s *Sequencer) TransferLeader(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.ensureInitialized(); err != nil {
+		return err
+	}
+
+	if err := s.conductorClient.TransferLeader(ctx); err != nil {
+		slog.Error("Failed to transfer leadership",
+			"sequencer", s.Config.ID,
+			"error", err)
+		return fmt.Errorf("failed to transfer leadership for sequencer %s: %w", s.Config.ID, err)
+	}
+	return nil
+}
+
+// Getter methods for template compatibility
+
+// ID returns the sequencer ID
+func (s *Sequencer) ID() string {
+	return s.Config.ID
+}
+
+// RaftAddr returns the raft address
+func (s *Sequencer) RaftAddr() string {
+	return s.Config.RaftAddr
+}
+
+// Voting returns the voting status
+func (s *Sequencer) Voting() bool {
+	return s.Config.Voting
+}
+
+// ConductorActive returns the conductor active status
+func (s *Sequencer) ConductorActive() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Status.ConductorActive
+}
+
+// ConductorLeader returns the conductor leader status
+func (s *Sequencer) ConductorLeader() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Status.ConductorLeader
+}
+
+// SequencerHealthy returns the sequencer healthy status
+func (s *Sequencer) SequencerHealthy() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Status.SequencerHealthy
+}
+
+// SequencerActive returns the sequencer active status
+func (s *Sequencer) SequencerActive() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Status.SequencerActive
+}
+
+// UnsafeL2 returns the unsafe L2 block number
+func (s *Sequencer) UnsafeL2() uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.Status.UnsafeL2 != nil {
+		return s.Status.UnsafeL2.Number
+	}
+	return 0
+}
+
+// ConductorPaused returns the conductor paused status
+func (s *Sequencer) ConductorPaused() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Status.ConductorPaused
+}
+
+// ConductorStopped returns the conductor stopped status
+func (s *Sequencer) ConductorStopped() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Status.ConductorStopped
 }

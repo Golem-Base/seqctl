@@ -1,0 +1,581 @@
+basePath: /api/v1
+definitions:
+  handlers.ErrorResponse:
+    properties:
+      detail:
+        type: string
+      errors:
+        additionalProperties: {}
+        type: object
+      instance:
+        type: string
+      status:
+        type: integer
+      title:
+        type: string
+      type:
+        type: string
+    type: object
+  handlers.ForceActiveRequest:
+    properties:
+      block_hash:
+        type: string
+    type: object
+  handlers.Link:
+    properties:
+      href:
+        type: string
+      method:
+        type: string
+    type: object
+  handlers.NetworkLinks:
+    properties:
+      self:
+        $ref: '#/definitions/handlers.Link'
+      sequencers:
+        $ref: '#/definitions/handlers.Link'
+    type: object
+  handlers.NetworkResponse:
+    properties:
+      _links:
+        $ref: '#/definitions/handlers.NetworkLinks'
+      healthy:
+        type: boolean
+      id:
+        type: string
+      name:
+        type: string
+      sequencers:
+        items:
+          $ref: '#/definitions/handlers.SequencerResponse'
+        type: array
+      updated_at:
+        type: string
+    type: object
+  handlers.OverrideLeaderRequest:
+    properties:
+      override:
+        type: boolean
+    type: object
+  handlers.RemoveMemberRequest:
+    properties:
+      server_id:
+        type: string
+    required:
+      - server_id
+    type: object
+  handlers.SequencerLinks:
+    properties:
+      force_active:
+        $ref: '#/definitions/handlers.Link'
+      halt:
+        $ref: '#/definitions/handlers.Link'
+      network:
+        $ref: '#/definitions/handlers.Link'
+      override_leader:
+        $ref: '#/definitions/handlers.Link'
+      pause:
+        $ref: '#/definitions/handlers.Link'
+      remove_member:
+        $ref: '#/definitions/handlers.Link'
+      resign_leader:
+        $ref: '#/definitions/handlers.Link'
+      resume:
+        $ref: '#/definitions/handlers.Link'
+      self:
+        $ref: '#/definitions/handlers.Link'
+      transfer_leader:
+        $ref: '#/definitions/handlers.Link'
+      update_member:
+        $ref: '#/definitions/handlers.Link'
+    type: object
+  handlers.SequencerResponse:
+    properties:
+      _links:
+        $ref: '#/definitions/handlers.SequencerLinks'
+      conductor_active:
+        type: boolean
+      conductor_leader:
+        type: boolean
+      conductor_paused:
+        type: boolean
+      conductor_stopped:
+        type: boolean
+      id:
+        type: string
+      network_id:
+        type: string
+      raft_addr:
+        type: string
+      sequencer_active:
+        type: boolean
+      sequencer_healthy:
+        type: boolean
+      unsafe_l2:
+        type: integer
+      updated_at:
+        type: string
+      voting:
+        type: boolean
+    type: object
+  handlers.TransferLeaderRequest:
+    properties:
+      target_addr:
+        type: string
+      target_id:
+        type: string
+    required:
+      - target_addr
+      - target_id
+    type: object
+  handlers.UpdateMembershipRequest:
+    properties:
+      server_addr:
+        type: string
+      server_id:
+        type: string
+      voting:
+        type: boolean
+    required:
+      - server_addr
+      - server_id
+    type: object
+host: localhost:8080
+info:
+  contact:
+    name: Golem Base Authors
+    url: https://github.com/golem-base/seqctl
+  description: |-
+    Control panel API for managing Optimism conductor sequencer clusters
+    This API provides endpoints to manage and monitor sequencer clusters deployed in Kubernetes environments.
+  license:
+    name: Apache 2.0
+    url: https://github.com/golem-base/seqctl/blob/main/LICENSE
+  title: SeqCtl API
+  version: "1.0"
+paths:
+  /networks:
+    get:
+      consumes:
+        - application/json
+      description: Get a list of all sequencer networks in the environment
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: List of networks
+          schema:
+            items:
+              $ref: '#/definitions/handlers.NetworkResponse'
+            type: array
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: List all networks
+      tags:
+        - Networks
+  /networks/{network}:
+    get:
+      consumes:
+        - application/json
+      description: Get detailed information about a specific network
+      parameters:
+        - description: Network name
+          in: path
+          name: network
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: Network details
+          schema:
+            $ref: '#/definitions/handlers.NetworkResponse'
+        "404":
+          description: Network not found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Get network details
+      tags:
+        - Networks
+  /networks/{network}/sequencers:
+    get:
+      consumes:
+        - application/json
+      description: Get all sequencers belonging to a specific network
+      parameters:
+        - description: Network name
+          in: path
+          name: network
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: List of sequencers
+          schema:
+            items:
+              $ref: '#/definitions/handlers.SequencerResponse'
+            type: array
+        "404":
+          description: Network not found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: List network sequencers
+      tags:
+        - Networks
+        - Sequencers
+  /sequencers/{id}/force-active:
+    post:
+      consumes:
+        - application/json
+      description: 'Force a sequencer to become the active sequencer (WARNING: Use only in emergencies)'
+      parameters:
+        - description: Sequencer ID
+          in: path
+          name: id
+          required: true
+          type: string
+        - description: Optional block hash to start from
+          in: body
+          name: request
+          schema:
+            $ref: '#/definitions/handlers.ForceActiveRequest'
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: Sequencer activated
+          schema:
+            $ref: '#/definitions/handlers.SequencerResponse'
+        "404":
+          description: Sequencer not found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Sequencer already active
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Operation failed
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Force sequencer active
+      tags:
+        - Actions
+  /sequencers/{id}/halt:
+    post:
+      consumes:
+        - application/json
+      description: Stop a sequencer from processing transactions
+      parameters:
+        - description: Sequencer ID
+          in: path
+          name: id
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: Sequencer halted
+          schema:
+            $ref: '#/definitions/handlers.SequencerResponse'
+        "404":
+          description: Sequencer not found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Sequencer already halted
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Operation failed
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Halt sequencer
+      tags:
+        - Actions
+  /sequencers/{id}/membership:
+    delete:
+      consumes:
+        - application/json
+      description: Remove a server from the Raft cluster membership
+      parameters:
+        - description: Sequencer ID (must be leader)
+          in: path
+          name: id
+          required: true
+          type: string
+        - description: Server to remove
+          in: body
+          name: request
+          required: true
+          schema:
+            $ref: '#/definitions/handlers.RemoveMemberRequest'
+      produces:
+        - application/json
+      responses:
+        "204":
+          description: Server removed successfully
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Sequencer not found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "422":
+          description: Validation failed
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Operation failed
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Remove server from cluster
+      tags:
+        - Actions
+    put:
+      consumes:
+        - application/json
+      description: Add a new server to the Raft cluster as either a voting or non-voting member
+      parameters:
+        - description: Sequencer ID (must be leader)
+          in: path
+          name: id
+          required: true
+          type: string
+        - description: New member details
+          in: body
+          name: request
+          required: true
+          schema:
+            $ref: '#/definitions/handlers.UpdateMembershipRequest'
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: Membership updated
+          schema:
+            $ref: '#/definitions/handlers.SequencerResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Sequencer not found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "422":
+          description: Validation failed
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Operation failed
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Update cluster membership
+      tags:
+        - Actions
+  /sequencers/{id}/override-leader:
+    post:
+      consumes:
+        - application/json
+      description: 'Force override the leader status of a sequencer (WARNING: Can cause split-brain)'
+      parameters:
+        - description: Sequencer ID
+          in: path
+          name: id
+          required: true
+          type: string
+        - description: Override configuration
+          in: body
+          name: request
+          required: true
+          schema:
+            $ref: '#/definitions/handlers.OverrideLeaderRequest'
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: Leader status overridden
+          schema:
+            $ref: '#/definitions/handlers.SequencerResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Sequencer not found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Operation failed
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Override leader status
+      tags:
+        - Actions
+  /sequencers/{id}/pause:
+    post:
+      consumes:
+        - application/json
+      description: Pause the conductor service on a sequencer, stopping it from participating in consensus
+      parameters:
+        - description: Sequencer ID
+          in: path
+          name: id
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: Updated sequencer state
+          schema:
+            $ref: '#/definitions/handlers.SequencerResponse'
+        "404":
+          description: Sequencer not found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Conductor already paused
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Operation failed
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Pause conductor
+      tags:
+        - Actions
+  /sequencers/{id}/resign-leader:
+    post:
+      consumes:
+        - application/json
+      description: Make the current leader sequencer resign, triggering a new leader election
+      parameters:
+        - description: Sequencer ID
+          in: path
+          name: id
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        "202":
+          description: Leadership resignation accepted
+          schema:
+            $ref: '#/definitions/handlers.SequencerResponse'
+        "404":
+          description: Sequencer not found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Sequencer is not the current leader
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Operation failed
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Resign leadership
+      tags:
+        - Actions
+  /sequencers/{id}/resume:
+    post:
+      consumes:
+        - application/json
+      description: Resume the conductor service on a sequencer, allowing it to participate in consensus again
+      parameters:
+        - description: Sequencer ID
+          in: path
+          name: id
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: Updated sequencer state
+          schema:
+            $ref: '#/definitions/handlers.SequencerResponse'
+        "404":
+          description: Sequencer not found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Conductor already active
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Operation failed
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Resume conductor
+      tags:
+        - Actions
+  /sequencers/{id}/transfer-leader:
+    post:
+      consumes:
+        - application/json
+      description: Transfer Raft leadership from the current leader to a specified target sequencer
+      parameters:
+        - description: Sequencer ID
+          in: path
+          name: id
+          required: true
+          type: string
+        - description: Transfer target details
+          in: body
+          name: request
+          required: true
+          schema:
+            $ref: '#/definitions/handlers.TransferLeaderRequest'
+      produces:
+        - application/json
+      responses:
+        "202":
+          description: Leadership transfer initiated
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Sequencer not found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Cannot transfer from current leader
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "422":
+          description: Validation failed
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Operation failed
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Transfer leadership
+      tags:
+        - Actions
+schemes:
+  - http
+  - https
+swagger: "2.0"
+tags:
+  - description: Operations related to sequencer networks
+    name: Networks
+  - description: Operations for managing individual sequencers
+    name: Sequencers
+  - description: Sequencer control actions (pause, resume, transfer leadership, etc.)
+    name: Actions
