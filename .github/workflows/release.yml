@@ -55,6 +55,9 @@ jobs:
           git config user.email github-actions@github.com
           git tag -a ${{ github.event.inputs.version }} -m "Release ${{ github.event.inputs.version }}"
 
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@9246b90769f852b3a8921f330c59e0b3f439d6e9 # v0.20.1
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@286f3b13b1b49da4ac219696163fb8c1c93e1200 # v6.0.0
         with:
